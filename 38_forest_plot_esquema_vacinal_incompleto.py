@@ -1,0 +1,262 @@
+import os
+import warnings
+
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+import matplotlib.patches as mpatches
+from matplotlib.lines import Line2D
+import statsmodels.api as sm
+import statsmodels.formula.api as smf
+from PIL import Image
+
+warnings.filterwarnings("ignore")
+
+# ─────────────────────────────────────────────────────────────────────────
+# Forest plot: esquema vacinal completo vs. incompleto (referência), em
+# relação ao risco de óbito hospitalar. "Óbito" é a única coluna de
+# desfecho na planilha (0 = alta, 1 = óbito) — alta é só o complemento
+# de óbito, então uma única linha de forest plot já descreve os dois
+# (OR para alta seria exatamente 1/OR para óbito, redundante).
+#
+# Versão com a referência INVERTIDA em relação ao script 37: aqui o
+# grupo de referência (OR=1) é o esquema INCOMPLETO, e a exposição
+# testada é o esquema COMPLETO — mesmos dados e mesmo modelo, apenas
+# com os papéis de exposição/referência trocados (OR aqui = 1 / OR do
+# script 37).
+#
+# Grupos lidos diretamente das colunas já classificadas na planilha:
+#   Eincompleto = 1 → esquema vacinal incompleto — grupo de REFERÊNCIA
+#                 (OR=1) desta análise.
+#   Ecompleto   = 1 → esquema vacinal completo — grupo de exposição,
+#                 cuja associação com o óbito é o que está sendo testado.
+# As duas colunas são mutuamente exclusivas e cobrem os 703 pacientes.
+#
+# Fonte: 703pacientes.xlsx.
+# ─────────────────────────────────────────────────────────────────────────
+XLSX_PATH = "703pacientes.xlsx"
+OUTPUT_PNG = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                          "forest_plot_esquema_vacinal_incompleto_referencia.png")
+OUTPUT_TIFF = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                           "forest_plot_esquema_vacinal_incompleto_referencia.tiff")
+
+# Conjunto de ajuste padrão do projeto (n=703 comporta as mesmas
+# covariáveis usadas nos outros forest plots, sem separação quase
+# perfeita).
+ADJUST_VARS = [
+    "Sexo", "Prob_Card", "CP", "Diabetes", "SRAG", "Choques", "Prob_neurol",
+    "Prob_Hemat", "Cancer", "Prob_Resp", "Prob_Metab", "Prob_TGI",
+    "Prob_Hep", "Prob_Hid_Elet", "Prob_AI_Infla", "Febre", "Outros",
+    "Traumatismo", "COVID_CRÍTICA", "Prob_Renal", "LRA", "Dias_permanência",
+    "Estado_Civil_1", "Estado_Civil_2", "Idade_cat_1", "Idade_cat_2",
+    "Idade_cat_3", "Grau_Instrucao_1", "Grau_Instrucao_2",
+]
+
+# ════════════════════════════════════════════════════════════
+# 1. CARREGAR DADOS — grupos já vêm prontos em Ecompleto/Eincompleto
+# ════════════════════════════════════════════════════════════
+dados_todos = pd.read_excel(XLSX_PATH)
+n_total = len(dados_todos)
+
+assert ((dados_todos["Ecompleto"] + dados_todos["Eincompleto"]) == 1).all(), (
+    "Ecompleto e Eincompleto deveriam ser mutuamente exclusivos e cobrir "
+    "todos os pacientes (soma = 1 em cada linha)")
+
+dados = dados_todos.copy()
+# Variável de exposição = esquema COMPLETO (Ecompleto=1); referência
+# (0) = esquema incompleto (Eincompleto=1).
+dados["Completo_bin"] = dados["Ecompleto"].astype(int)
+n_completo = int(dados["Ecompleto"].sum())
+n_incompleto = int(dados["Eincompleto"].sum())
+n_obitos = int(dados["Óbito"].sum())
+
+
+def fit_or(formula, var, data):
+    modelo = smf.glm(formula=formula, data=data,
+                      family=sm.families.Binomial()).fit()
+    beta = modelo.params[var]
+    p = modelo.pvalues[var]
+    lo, hi = modelo.conf_int().loc[var]
+    return np.exp(beta), np.exp(lo), np.exp(hi), p
+
+
+# Óbito e Alta são o mesmo desfecho binário (0/1 na coluna "Óbito"; Alta
+# é só o complemento) — uma única linha de forest plot já descreve os
+# dois (OR para Alta seria exatamente 1/OR para Óbito, redundante).
+n_evento = int(dados["Óbito"].sum())
+n_evento_completo = int(dados.loc[dados["Completo_bin"] == 1, "Óbito"].sum())
+
+OR, lo, hi, p = fit_or("Óbito ~ Completo_bin", "Completo_bin", dados)
+formula_adj = "Óbito ~ Completo_bin + " + " + ".join(ADJUST_VARS)
+ORa, loa, hia, pa = fit_or(formula_adj, "Completo_bin", dados)
+
+df_raw = pd.DataFrame([{
+    "label": "Óbito hospitalar", "n_geral": n_evento,
+    "n_completo_evento": n_evento_completo,
+    "OR": OR, "IC_inf": lo, "IC_sup": hi, "p_OR": p,
+    "ORa": ORa, "ICa_inf": loa, "ICa_sup": hia, "p_ORa": pa,
+}])
+
+print("=" * 70)
+print(f"Tabela lida de: {XLSX_PATH}")
+print(f"n total = {n_total} (Ecompleto={n_completo}, "
+      f"Eincompleto={n_incompleto}) | Óbitos={n_obitos}")
+print(df_raw.to_string())
+print("=" * 70)
+
+# ════════════════════════════════════════════════════════════
+# 2. FOREST PLOT
+# ════════════════════════════════════════════════════════════
+BG = "#FFFFFF"
+PANEL = "#F6F8FA"
+BORDER = "#D0D7DE"
+TEXT = "#1F2328"
+SUBTEXT = "#57606A"
+GOLD = "#B08800"
+COR_PROT = "#1D9E75"
+COR_RISCO = "#E07B39"
+
+
+def sig_stars(p):
+    if p is None or np.isnan(p):
+        return ""
+    if p < 0.001:
+        return "***"
+    if p < 0.01:
+        return "**"
+    if p < 0.05:
+        return "*"
+    return ""
+
+
+n_rows = len(df_raw)
+fig_h = max(4.5, n_rows * 0.9 + 3.0)
+fig, axes = plt.subplots(
+    1, 4, figsize=(16, fig_h), facecolor=BG,
+    gridspec_kw={"width_ratios": [2.5, 5, 2.5, 5], "wspace": 0.04},
+)
+ax_labels, ax_or, ax_gap, ax_ora = axes
+ax_gap.set_visible(False)
+
+ax_labels.set_facecolor(BG)
+ax_labels.set_xlim(0, 1)
+ax_labels.set_ylim(n_rows - 0.5, -0.5)
+for spine in ax_labels.spines.values():
+    spine.set_visible(False)
+ax_labels.set_xticks([])
+ax_labels.set_yticks([])
+
+for ax in (ax_labels, ax_or, ax_ora):
+    for i in range(n_rows):
+        bg_col = "#E8EDF2" if i % 2 == 0 else PANEL
+        ax.axhspan(i - 0.42, i + 0.42, color=bg_col, alpha=0.55, zorder=0)
+
+for i, row in df_raw.iterrows():
+    ax_labels.text(0.98, i, f"{row['label']} (n={row['n_geral']})",
+                   color=TEXT, fontsize=16, va="center", ha="right")
+
+
+def draw_panel(ax, col_or, col_lo, col_hi, col_p, title, xlim):
+    ax.set_facecolor(PANEL)
+    ax.set_xscale("log")
+    ax.xaxis.grid(True, color=BORDER, linewidth=0.9, zorder=0, alpha=0.8)
+    ax.set_axisbelow(True)
+    for spine in ax.spines.values():
+        spine.set_edgecolor(BORDER)
+        spine.set_linewidth(0.8)
+    ax.axvline(1.0, color=GOLD, linewidth=2.5, linestyle="--", zorder=2, alpha=0.9)
+
+    for i, row in df_raw.iterrows():
+        OR_ = row[col_or]
+        lo_ = row[col_lo]
+        hi_ = row[col_hi]
+        p_ = row[col_p]
+
+        if (pd.isna(OR_) or pd.isna(lo_) or pd.isna(hi_)
+                or not np.isfinite(OR_) or OR_ < 1e-6):
+            ax.text(0.5, i, "—", color=SUBTEXT, fontsize=13,
+                    va="center", ha="center",
+                    transform=ax.get_yaxis_transform())
+            continue
+
+        cor = COR_PROT if OR_ < 1 else COR_RISCO
+        sig = (p_ is not None) and not np.isnan(p_) and (p_ < 0.05)
+
+        lo_plot = max(lo_, xlim[0] * 1.02)
+        hi_plot = min(hi_, xlim[1] * 0.98) if np.isfinite(hi_) else xlim[1] * 0.98
+        ax.plot([lo_plot, hi_plot], [i, i],
+                color=cor, linewidth=3.8, zorder=3, alpha=0.85,
+                solid_capstyle="round")
+
+        ax.plot(OR_, i, marker="D" if sig else "o", markersize=9 if sig else 7,
+                color=cor, markerfacecolor=cor if sig else BG,
+                markeredgecolor=cor, markeredgewidth=1.6, zorder=5)
+
+        hi_txt = min(hi_, 9999) if np.isfinite(hi_) else float("inf")
+        hi_str = f"{hi_txt:.2f}" if np.isfinite(hi_txt) else "∞"
+        txt = f"{OR_:.2f} ({lo_:.2f}–{hi_str}){sig_stars(p_)}"
+        ax.text(1.02, i, txt, transform=ax.get_yaxis_transform(),
+                color=TEXT, fontsize=15, va="center", ha="left", clip_on=False)
+
+    ax.set_yticks(range(n_rows))
+    ax.set_yticklabels([""] * n_rows)
+    ax.tick_params(axis="y", length=0)
+    ax.tick_params(axis="x", colors=SUBTEXT, labelsize=14)
+    ax.set_ylim(n_rows - 0.5, -0.5)
+    ax.set_xlim(*xlim)
+    ax.set_xlabel("Odds Ratio (escala log)", fontsize=20, color=SUBTEXT, labelpad=6)
+    ax.set_title(title, fontsize=20, fontweight="bold", color=TEXT, pad=5)
+
+
+draw_panel(ax_or, "OR", "IC_inf", "IC_sup", "p_OR",
+           "OR bruto (IC 95%)", xlim=(0.03, 3))
+draw_panel(ax_ora, "ORa", "ICa_inf", "ICa_sup", "p_ORa",
+           "OR ajustado (IC 95%)", xlim=(0.03, 3))
+
+legend_elements = [
+    mpatches.Patch(facecolor=COR_PROT, edgecolor=COR_PROT,
+                   label="Fator protetor (OR < 1, menos óbito)"),
+    mpatches.Patch(facecolor=COR_RISCO, edgecolor=COR_RISCO,
+                   label="Fator de risco (OR > 1, mais óbito)"),
+    Line2D([0], [0], marker="D", color="none", markerfacecolor=TEXT,
+           markeredgecolor=TEXT, markersize=5, label="Losango = p < 0,05"),
+    Line2D([0], [0], marker="o", color="none", markerfacecolor=BG,
+           markeredgecolor=TEXT, markeredgewidth=1.2, markersize=6,
+           label="Círculo aberto = p ≥ 0,05"),
+    Line2D([0], [0], color=GOLD, linewidth=1.2, linestyle="--",
+           label="Linha de referência (OR = 1)"),
+]
+ax_or.legend(handles=legend_elements, fontsize=8, frameon=True, edgecolor=BORDER,
+             facecolor=BG, labelcolor=TEXT, loc="lower left", framealpha=0.97,
+             borderpad=0.9, handlelength=0.5)
+
+fig.text(0.50, 1.14,
+          "Forest Plot — Esquema Vacinal Completo vs. Incompleto",
+          ha="center", va="top", fontsize=30, fontweight="bold", color=TEXT)
+subtitle = (f"Referência: esquema incompleto (Eincompleto) | Exposição: "
+            f"esquema completo (Ecompleto) | n = {n_total} "
+            f"(Completo={n_completo}, Incompleto={n_incompleto})")
+fig.text(0.50, 1.02, subtitle, ha="center", va="top", fontsize=17, color=SUBTEXT)
+fig.add_artist(plt.Line2D([0.13, 0.97], [0.96, 0.96], transform=fig.transFigure,
+                           color=BORDER, linewidth=1.8))
+fig.text(0.03, -0.14,
+          "*** p<0,001 ** p<0,01 * p<0,05 | OR = Odds Ratio; IC = Intervalo "
+          "de Confiança de 95% | Referência (OR=1) = esquema vacinal "
+          "incompleto (coluna Eincompleto) | Exposição = esquema vacinal "
+          "completo (coluna Ecompleto)",
+          color=SUBTEXT, fontsize=11.5, style="italic")
+fig.text(0.03, -0.20,
+          "Ajustado por sexo, comorbidades, idade, estado civil, "
+          "escolaridade e tempo de internação | Fonte: 703pacientes.xlsx",
+          color=SUBTEXT, fontsize=11.5, style="italic")
+
+plt.tight_layout(rect=[0, 0.03, 1, 1.94])
+plt.savefig(OUTPUT_PNG, dpi=180, bbox_inches="tight", facecolor=BG)
+
+_buf_png = OUTPUT_PNG.replace(".png", "_300dpi_tmp.png")
+plt.savefig(_buf_png, dpi=300, bbox_inches="tight", facecolor=BG)
+Image.open(_buf_png).save(OUTPUT_TIFF, dpi=(300, 300), compression="tiff_lzw")
+os.remove(_buf_png)
+
+print(f"Gráfico salvo em: {OUTPUT_PNG} e {OUTPUT_TIFF}")
+plt.show()
