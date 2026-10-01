@@ -13,21 +13,20 @@ from PIL import Image
 warnings.filterwarnings("ignore")
 
 # ─────────────────────────────────────────────────────────────────────────
-# Forest plot: esquema vacinal completo vs. incompleto (referência),
-# em relação ao risco de óbito hospitalar. "Óbito" é a única coluna de
+# Forest plot: esquema vacinal incompleto vs. completo (referência), em
+# relação ao risco de óbito hospitalar. "Óbito" é a única coluna de
 # desfecho na planilha (0 = alta, 1 = óbito) — alta é só o complemento
 # de óbito, então uma única linha de forest plot já descreve os dois
 # (OR para alta seria exatamente 1/OR para óbito, redundante).
 #
-# Completo   = 2 doses de Pfizer/AstraZeneca/Coronavac (ou qualquer
-#              vacina de 2 doses), OU 1 dose de Janssen (dose única).
-# Incompleto = menos doses que o necessário para completar o esquema
-#              acima, incluindo 0 doses (não vacinado também é, por
-#              definição, um esquema incompleto) — é o grupo de
-#              REFERÊNCIA (OR=1) desta análise.
+# Grupos lidos diretamente das colunas já classificadas na planilha:
+#   Ecompleto   = 1 → esquema vacinal completo — grupo de REFERÊNCIA
+#                 (OR=1) desta análise.
+#   Eincompleto = 1 → esquema vacinal incompleto — grupo de exposição,
+#                 cuja associação com o óbito é o que está sendo testado.
+# As duas colunas são mutuamente exclusivas e cobrem os 703 pacientes.
 #
-# Fonte: 703pacientes.xlsx (doses em "Vacinas", fabricante em
-# "Fabricante_", usado só para identificar o caso de dose única).
+# Fonte: 703pacientes.xlsx.
 # ─────────────────────────────────────────────────────────────────────────
 XLSX_PATH = "703pacientes.xlsx"
 OUTPUT_PNG = os.path.join(os.path.dirname(os.path.abspath(__file__)),
@@ -35,9 +34,9 @@ OUTPUT_PNG = os.path.join(os.path.dirname(os.path.abspath(__file__)),
 OUTPUT_TIFF = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                            "forest_plot_esquema_vacinal_completo.tiff")
 
-# Conjunto de ajuste padrão do projeto (agora que "incompleto" inclui os
-# não vacinados, n=703 comporta as mesmas covariáveis usadas nos outros
-# forest plots, sem separação quase perfeita).
+# Conjunto de ajuste padrão do projeto (n=703 comporta as mesmas
+# covariáveis usadas nos outros forest plots, sem separação quase
+# perfeita).
 ADJUST_VARS = [
     "Sexo", "Prob_Card", "CP", "Diabetes", "SRAG", "Choques", "Prob_neurol",
     "Prob_Hemat", "Cancer", "Prob_Resp", "Prob_Metab", "Prob_TGI",
@@ -47,34 +46,22 @@ ADJUST_VARS = [
     "Idade_cat_3", "Grau_Instrucao_1", "Grau_Instrucao_2",
 ]
 
-
-def classifica_esquema(vacinas, fabricante):
-    """Completo = >=2 doses, ou 1 dose exclusivamente de Janssen.
-    Incompleto = tudo o que não é completo, inclusive 0 doses (não
-    vacinado também é, por definição, um esquema incompleto)."""
-    janssen_unico = isinstance(fabricante, str) and fabricante.strip() == "Janssen"
-    completo = (vacinas >= 2) or (vacinas == 1 and janssen_unico)
-    return "Completo" if completo else "Incompleto"
-
-
 # ════════════════════════════════════════════════════════════
-# 1. CARREGAR DADOS E DEFINIR EXPOSIÇÃO (referência = esquema incompleto,
-#    que inclui os não vacinados — 0 doses também é incompleto)
+# 1. CARREGAR DADOS — grupos já vêm prontos em Ecompleto/Eincompleto
 # ════════════════════════════════════════════════════════════
 dados_todos = pd.read_excel(XLSX_PATH)
-dados_todos["Esquema"] = [
-    classifica_esquema(v, f) for v, f in
-    zip(dados_todos["Vacinas"], dados_todos["Fabricante_"])
-]
 n_total = len(dados_todos)
 
-dados = dados_todos.copy()
-dados["Completo_bin"] = (dados["Esquema"] == "Completo").astype(int)
+assert ((dados_todos["Ecompleto"] + dados_todos["Eincompleto"]) == 1).all(), (
+    "Ecompleto e Eincompleto deveriam ser mutuamente exclusivos e cobrir "
+    "todos os pacientes (soma = 1 em cada linha)")
 
-n_analisado = len(dados)
-n_completo = int(dados["Completo_bin"].sum())
-n_incompleto = n_analisado - n_completo
-n_nao_vac = int((dados_todos["Vacinas"] == 0).sum())
+dados = dados_todos.copy()
+# Variável de exposição = esquema INCOMPLETO (Eincompleto=1); referência
+# (0) = esquema completo (Ecompleto=1), conforme pedido.
+dados["Incompleto_bin"] = dados["Eincompleto"].astype(int)
+n_completo = int(dados["Ecompleto"].sum())
+n_incompleto = int(dados["Eincompleto"].sum())
 n_obitos = int(dados["Óbito"].sum())
 
 
@@ -91,23 +78,23 @@ def fit_or(formula, var, data):
 # é só o complemento) — uma única linha de forest plot já descreve os
 # dois (OR para Alta seria exatamente 1/OR para Óbito, redundante).
 n_evento = int(dados["Óbito"].sum())
-n_evento_completo = int(dados.loc[dados["Completo_bin"] == 1, "Óbito"].sum())
+n_evento_incompleto = int(dados.loc[dados["Incompleto_bin"] == 1, "Óbito"].sum())
 
-OR, lo, hi, p = fit_or("Óbito ~ Completo_bin", "Completo_bin", dados)
-formula_adj = "Óbito ~ Completo_bin + " + " + ".join(ADJUST_VARS)
-ORa, loa, hia, pa = fit_or(formula_adj, "Completo_bin", dados)
+OR, lo, hi, p = fit_or("Óbito ~ Incompleto_bin", "Incompleto_bin", dados)
+formula_adj = "Óbito ~ Incompleto_bin + " + " + ".join(ADJUST_VARS)
+ORa, loa, hia, pa = fit_or(formula_adj, "Incompleto_bin", dados)
 
 df_raw = pd.DataFrame([{
     "label": "Óbito hospitalar", "n_geral": n_evento,
-    "n_completo_evento": n_evento_completo,
+    "n_incompleto_evento": n_evento_incompleto,
     "OR": OR, "IC_inf": lo, "IC_sup": hi, "p_OR": p,
     "ORa": ORa, "ICa_inf": loa, "ICa_sup": hia, "p_ORa": pa,
 }])
 
 print("=" * 70)
 print(f"Tabela lida de: {XLSX_PATH}")
-print(f"n total = {n_total} = analisados (Completo={n_completo}, "
-      f"Incompleto={n_incompleto}, dos quais não vacinados={n_nao_vac})")
+print(f"n total = {n_total} (Ecompleto={n_completo}, "
+      f"Eincompleto={n_incompleto}) | Óbitos={n_obitos}")
 print(df_raw.to_string())
 print("=" * 70)
 
@@ -238,20 +225,19 @@ ax_or.legend(handles=legend_elements, fontsize=8, frameon=True, edgecolor=BORDER
              borderpad=0.9, handlelength=0.5)
 
 fig.text(0.50, 1.14,
-          "Forest Plot — Esquema Vacinal Completo vs. Incompleto",
+          "Forest Plot — Esquema Vacinal Incompleto vs. Completo",
           ha="center", va="top", fontsize=30, fontweight="bold", color=TEXT)
-subtitle = (f"Referência: esquema incompleto (inclui não vacinados) | "
-            f"Completo = 2 doses (Pfizer/AstraZeneca/Coronavac) ou 1 dose "
-            f"(Janssen) | n = {n_analisado} (Completo={n_completo}, "
-            f"Incompleto={n_incompleto}, dos quais {n_nao_vac} não "
-            f"vacinados)")
+subtitle = (f"Referência: esquema completo (Ecompleto) | Exposição: "
+            f"esquema incompleto (Eincompleto) | n = {n_total} "
+            f"(Completo={n_completo}, Incompleto={n_incompleto})")
 fig.text(0.50, 1.02, subtitle, ha="center", va="top", fontsize=17, color=SUBTEXT)
 fig.add_artist(plt.Line2D([0.13, 0.97], [0.96, 0.96], transform=fig.transFigure,
                            color=BORDER, linewidth=1.8))
 fig.text(0.03, -0.14,
           "*** p<0,001 ** p<0,01 * p<0,05 | OR = Odds Ratio; IC = Intervalo "
           "de Confiança de 95% | Referência (OR=1) = esquema vacinal "
-          "incompleto (0 doses, ou 1 dose de vacina de 2 doses)",
+          "completo (coluna Ecompleto) | Exposição = esquema vacinal "
+          "incompleto (coluna Eincompleto)",
           color=SUBTEXT, fontsize=11.5, style="italic")
 fig.text(0.03, -0.20,
           "Ajustado por sexo, comorbidades, idade, estado civil, "
