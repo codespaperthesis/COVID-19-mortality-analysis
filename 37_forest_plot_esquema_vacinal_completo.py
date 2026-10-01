@@ -203,9 +203,9 @@ def draw_panel(ax, col_or, col_lo, col_hi, col_p, title, xlim):
 
 
 draw_panel(ax_or, "OR", "IC_inf", "IC_sup", "p_OR",
-           "OR bruto (IC 95%)", xlim=(0.03, 3))
+           "OR bruto (IC 95%)", xlim=(0.03, 12))
 draw_panel(ax_ora, "ORa", "ICa_inf", "ICa_sup", "p_ORa",
-           "OR ajustado (IC 95%)", xlim=(0.03, 3))
+           "OR ajustado (IC 95%)", xlim=(0.03, 12))
 
 legend_elements = [
     mpatches.Patch(facecolor=COR_PROT, edgecolor=COR_PROT,
