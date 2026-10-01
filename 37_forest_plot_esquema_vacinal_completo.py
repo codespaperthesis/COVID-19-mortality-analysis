@@ -220,10 +220,6 @@ legend_elements = [
     Line2D([0], [0], color=GOLD, linewidth=1.2, linestyle="--",
            label="Linha de referência (OR = 1)"),
 ]
-ax_or.legend(handles=legend_elements, fontsize=8, frameon=True, edgecolor=BORDER,
-             facecolor=BG, labelcolor=TEXT, loc="lower left", framealpha=0.97,
-             borderpad=0.9, handlelength=0.5)
-
 fig.text(0.50, 1.14,
           "Forest Plot — Esquema Vacinal Incompleto vs. Completo",
           ha="center", va="top", fontsize=30, fontweight="bold", color=TEXT)
@@ -233,24 +229,24 @@ subtitle = (f"Referência: esquema completo (Ecompleto) | Exposição: "
 fig.text(0.50, 1.02, subtitle, ha="center", va="top", fontsize=17, color=SUBTEXT)
 fig.add_artist(plt.Line2D([0.13, 0.97], [0.96, 0.96], transform=fig.transFigure,
                            color=BORDER, linewidth=1.8))
-fig.text(0.03, -0.14,
-          "*** p<0,001 ** p<0,01 * p<0,05 | OR = Odds Ratio; IC = Intervalo "
-          "de Confiança de 95% | Referência (OR=1) = esquema vacinal "
-          "completo (coluna Ecompleto) | Exposição = esquema vacinal "
-          "incompleto (coluna Eincompleto)",
-          color=SUBTEXT, fontsize=11.5, style="italic")
-fig.text(0.03, -0.20,
-          "Ajustado por sexo, comorbidades, idade, estado civil, "
-          "escolaridade e tempo de internação | Fonte: 703pacientes.xlsx",
-          color=SUBTEXT, fontsize=11.5, style="italic")
 
-plt.tight_layout(rect=[0, 0.03, 1, 1.94])
+fig.legend(handles=legend_elements, loc="upper center", bbox_to_anchor=(0.5, 0.90),
+           ncol=5, frameon=False, fontsize=11.5, labelcolor=TEXT,
+           columnspacing=1.4, handlelength=1.3)
+
+plt.tight_layout(rect=[0, 0, 1, 2.3])
 plt.savefig(OUTPUT_PNG, dpi=180, bbox_inches="tight", facecolor=BG)
+
+_buf_png600 = OUTPUT_PNG.replace(".png", "_600dpi_tmp.png")
+plt.savefig(_buf_png600, dpi=600, bbox_inches="tight", facecolor=BG)
+OUTPUT_TIFF_600 = OUTPUT_TIFF.replace(".tiff", "_600dpi.tiff")
+Image.open(_buf_png600).save(OUTPUT_TIFF_600, dpi=(600, 600), compression="tiff_lzw")
+os.remove(_buf_png600)
 
 _buf_png = OUTPUT_PNG.replace(".png", "_300dpi_tmp.png")
 plt.savefig(_buf_png, dpi=300, bbox_inches="tight", facecolor=BG)
 Image.open(_buf_png).save(OUTPUT_TIFF, dpi=(300, 300), compression="tiff_lzw")
 os.remove(_buf_png)
 
-print(f"Gráfico salvo em: {OUTPUT_PNG} e {OUTPUT_TIFF}")
+print(f"Gráfico salvo em: {OUTPUT_PNG}, {OUTPUT_TIFF} e {OUTPUT_TIFF_600}")
 plt.show()
