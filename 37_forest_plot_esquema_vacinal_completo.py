@@ -22,8 +22,9 @@ warnings.filterwarnings("ignore")
 # Completo   = 2 doses de Pfizer/AstraZeneca/Coronavac (ou qualquer
 #              vacina de 2 doses), OU 1 dose de Janssen (dose única).
 # Incompleto = menos doses que o necessário para completar o esquema
-#              acima — é o grupo de REFERÊNCIA (OR=1) desta análise.
-# Não vacinados são excluídos da comparação.
+#              acima, incluindo 0 doses (não vacinado também é, por
+#              definição, um esquema incompleto) — é o grupo de
+#              REFERÊNCIA (OR=1) desta análise.
 #
 # Fonte: 703pacientes.xlsx (doses em "Vacinas", fabricante em
 # "Fabricante_", usado só para identificar o caso de dose única).
@@ -34,40 +35,46 @@ OUTPUT_PNG = os.path.join(os.path.dirname(os.path.abspath(__file__)),
 OUTPUT_TIFF = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                            "forest_plot_esquema_vacinal_completo.tiff")
 
-# Conjunto de ajuste reduzido: a amostra desta comparação é pequena
-# (n=95, Completo=75 vs Incompleto=20; ~41 óbitos), insuficiente para os
-# ~28 covariáveis usadas nos outros forest plots deste projeto — nesse
-# caso a regressão sofre separação quase perfeita (OR/IC absurdos,
-# p≈1). Mantém-se aqui só os confundidores clínicos mais relevantes.
-ADJUST_VARS = ["Sexo", "Idade", "COVID_CRÍTICA", "CP"]
+# Conjunto de ajuste padrão do projeto (agora que "incompleto" inclui os
+# não vacinados, n=703 comporta as mesmas covariáveis usadas nos outros
+# forest plots, sem separação quase perfeita).
+ADJUST_VARS = [
+    "Sexo", "Prob_Card", "CP", "Diabetes", "SRAG", "Choques", "Prob_neurol",
+    "Prob_Hemat", "Cancer", "Prob_Resp", "Prob_Metab", "Prob_TGI",
+    "Prob_Hep", "Prob_Hid_Elet", "Prob_AI_Infla", "Febre", "Outros",
+    "Traumatismo", "COVID_CRÍTICA", "Prob_Renal", "LRA", "Dias_permanência",
+    "Estado_Civil_1", "Estado_Civil_2", "Idade_cat_1", "Idade_cat_2",
+    "Idade_cat_3", "Grau_Instrucao_1", "Grau_Instrucao_2",
+]
 
 
-def classifica_esquema(vacinas, fabricante, vacinado):
-    """Completo = >=2 doses, ou 1 dose exclusivamente de Janssen."""
-    if vacinado == 0 or vacinas == 0:
-        return "Não vacinado"
+def classifica_esquema(vacinas, fabricante):
+    """Completo = >=2 doses, ou 1 dose exclusivamente de Janssen.
+    Incompleto = tudo o que não é completo, inclusive 0 doses (não
+    vacinado também é, por definição, um esquema incompleto)."""
     janssen_unico = isinstance(fabricante, str) and fabricante.strip() == "Janssen"
     completo = (vacinas >= 2) or (vacinas == 1 and janssen_unico)
     return "Completo" if completo else "Incompleto"
 
 
 # ════════════════════════════════════════════════════════════
-# 1. CARREGAR DADOS E DEFINIR EXPOSIÇÃO (referência = esquema incompleto)
+# 1. CARREGAR DADOS E DEFINIR EXPOSIÇÃO (referência = esquema incompleto,
+#    que inclui os não vacinados — 0 doses também é incompleto)
 # ════════════════════════════════════════════════════════════
 dados_todos = pd.read_excel(XLSX_PATH)
 dados_todos["Esquema"] = [
-    classifica_esquema(v, f, vc) for v, f, vc in
-    zip(dados_todos["Vacinas"], dados_todos["Fabricante_"], dados_todos["Vacinado"])
+    classifica_esquema(v, f) for v, f in
+    zip(dados_todos["Vacinas"], dados_todos["Fabricante_"])
 ]
 n_total = len(dados_todos)
-n_nao_vac = int((dados_todos["Esquema"] == "Não vacinado").sum())
 
-dados = dados_todos[dados_todos["Esquema"].isin(["Completo", "Incompleto"])].copy()
+dados = dados_todos.copy()
 dados["Completo_bin"] = (dados["Esquema"] == "Completo").astype(int)
 
 n_analisado = len(dados)
 n_completo = int(dados["Completo_bin"].sum())
 n_incompleto = n_analisado - n_completo
+n_nao_vac = int((dados_todos["Vacinas"] == 0).sum())
 n_obitos = int(dados["Óbito"].sum())
 
 
@@ -99,9 +106,8 @@ df_raw = pd.DataFrame([{
 
 print("=" * 70)
 print(f"Tabela lida de: {XLSX_PATH}")
-print(f"n total = {n_total} | não vacinados excluídos = {n_nao_vac} | "
-      f"analisados = {n_analisado} (Completo={n_completo}, "
-      f"Incompleto={n_incompleto})")
+print(f"n total = {n_total} = analisados (Completo={n_completo}, "
+      f"Incompleto={n_incompleto}, dos quais não vacinados={n_nao_vac})")
 print(df_raw.to_string())
 print("=" * 70)
 
@@ -234,25 +240,22 @@ ax_or.legend(handles=legend_elements, fontsize=8, frameon=True, edgecolor=BORDER
 fig.text(0.50, 1.14,
           "Forest Plot — Esquema Vacinal Completo vs. Incompleto",
           ha="center", va="top", fontsize=30, fontweight="bold", color=TEXT)
-subtitle = (f"Referência: esquema incompleto | Completo = 2 doses "
-            f"(Pfizer/AstraZeneca/Coronavac) ou 1 dose (Janssen) | "
-            f"n analisado = {n_analisado} (Completo={n_completo}, "
-            f"Incompleto={n_incompleto}) | não vacinados excluídos "
-            f"(n={n_nao_vac})")
+subtitle = (f"Referência: esquema incompleto (inclui não vacinados) | "
+            f"Completo = 2 doses (Pfizer/AstraZeneca/Coronavac) ou 1 dose "
+            f"(Janssen) | n = {n_analisado} (Completo={n_completo}, "
+            f"Incompleto={n_incompleto}, dos quais {n_nao_vac} não "
+            f"vacinados)")
 fig.text(0.50, 1.02, subtitle, ha="center", va="top", fontsize=17, color=SUBTEXT)
 fig.add_artist(plt.Line2D([0.13, 0.97], [0.96, 0.96], transform=fig.transFigure,
                            color=BORDER, linewidth=1.8))
 fig.text(0.03, -0.14,
           "*** p<0,001 ** p<0,01 * p<0,05 | OR = Odds Ratio; IC = Intervalo "
           "de Confiança de 95% | Referência (OR=1) = esquema vacinal "
-          "incompleto | Não vacinados excluídos desta comparação",
+          "incompleto (0 doses, ou 1 dose de vacina de 2 doses)",
           color=SUBTEXT, fontsize=11.5, style="italic")
 fig.text(0.03, -0.20,
-          "Ajustado por sexo, idade, COVID crítica e nº de comorbidades (CP) "
-          "— conjunto reduzido de covariáveis, já que a amostra (n=95) não "
-          "comporta o conjunto completo de ajuste usado em outros forest "
-          "plots deste projeto sem causar separação quase perfeita | "
-          "Fonte: 703pacientes.xlsx",
+          "Ajustado por sexo, comorbidades, idade, estado civil, "
+          "escolaridade e tempo de internação | Fonte: 703pacientes.xlsx",
           color=SUBTEXT, fontsize=11.5, style="italic")
 
 plt.tight_layout(rect=[0, 0.03, 1, 1.94])
