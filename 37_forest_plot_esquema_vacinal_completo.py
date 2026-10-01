@@ -14,7 +14,10 @@ warnings.filterwarnings("ignore")
 
 # ─────────────────────────────────────────────────────────────────────────
 # Forest plot: esquema vacinal completo vs. incompleto (referência),
-# em relação ao risco de óbito e de alta hospitalar.
+# em relação ao risco de óbito hospitalar. "Óbito" é a única coluna de
+# desfecho na planilha (0 = alta, 1 = óbito) — alta é só o complemento
+# de óbito, então uma única linha de forest plot já descreve os dois
+# (OR para alta seria exatamente 1/OR para óbito, redundante).
 #
 # Completo   = 2 doses de Pfizer/AstraZeneca/Coronavac (ou qualquer
 #              vacina de 2 doses), OU 1 dose de Janssen (dose única).
@@ -56,8 +59,6 @@ dados_todos["Esquema"] = [
     classifica_esquema(v, f, vc) for v, f, vc in
     zip(dados_todos["Vacinas"], dados_todos["Fabricante_"], dados_todos["Vacinado"])
 ]
-dados_todos["Alta"] = 1 - dados_todos["Óbito"]
-
 n_total = len(dados_todos)
 n_nao_vac = int((dados_todos["Esquema"] == "Não vacinado").sum())
 
@@ -68,7 +69,6 @@ n_analisado = len(dados)
 n_completo = int(dados["Completo_bin"].sum())
 n_incompleto = n_analisado - n_completo
 n_obitos = int(dados["Óbito"].sum())
-n_altas = int(dados["Alta"].sum())
 
 
 def fit_or(formula, var, data):
@@ -80,25 +80,22 @@ def fit_or(formula, var, data):
     return np.exp(beta), np.exp(lo), np.exp(hi), p
 
 
-linhas = []
-for desfecho, label in [("Óbito", "Óbito hospitalar"), ("Alta", "Alta hospitalar")]:
-    n_evento = int(dados[desfecho].sum())
-    n_evento_completo = int(dados.loc[dados["Completo_bin"] == 1, desfecho].sum())
+# Óbito e Alta são o mesmo desfecho binário (0/1 na coluna "Óbito"; Alta
+# é só o complemento) — uma única linha de forest plot já descreve os
+# dois (OR para Alta seria exatamente 1/OR para Óbito, redundante).
+n_evento = int(dados["Óbito"].sum())
+n_evento_completo = int(dados.loc[dados["Completo_bin"] == 1, "Óbito"].sum())
 
-    OR, lo, hi, p = fit_or(f"{desfecho} ~ Completo_bin", "Completo_bin", dados)
-    formula_adj = f"{desfecho} ~ Completo_bin + " + " + ".join(ADJUST_VARS)
-    ORa, loa, hia, pa = fit_or(formula_adj, "Completo_bin", dados)
+OR, lo, hi, p = fit_or("Óbito ~ Completo_bin", "Completo_bin", dados)
+formula_adj = "Óbito ~ Completo_bin + " + " + ".join(ADJUST_VARS)
+ORa, loa, hia, pa = fit_or(formula_adj, "Completo_bin", dados)
 
-    linhas.append({
-        "label": label, "n_geral": n_evento, "n_completo_evento": n_evento_completo,
-        "OR": OR, "IC_inf": lo, "IC_sup": hi, "p_OR": p,
-        "ORa": ORa, "ICa_inf": loa, "ICa_sup": hia, "p_ORa": pa,
-        # para Óbito, favorável = OR<1 (menos óbito); para Alta, favorável
-        # = OR>1 (mais alta) — evita colorir "Alta" como se fosse risco
-        "favoravel_quando_maior": desfecho == "Alta",
-    })
-
-df_raw = pd.DataFrame(linhas)
+df_raw = pd.DataFrame([{
+    "label": "Óbito hospitalar", "n_geral": n_evento,
+    "n_completo_evento": n_evento_completo,
+    "OR": OR, "IC_inf": lo, "IC_sup": hi, "p_OR": p,
+    "ORa": ORa, "ICa_inf": loa, "ICa_sup": hia, "p_ORa": pa,
+}])
 
 print("=" * 70)
 print(f"Tabela lida de: {XLSX_PATH}")
@@ -183,8 +180,7 @@ def draw_panel(ax, col_or, col_lo, col_hi, col_p, title, xlim):
                     transform=ax.get_yaxis_transform())
             continue
 
-        favoravel = (OR_ > 1) if row["favoravel_quando_maior"] else (OR_ < 1)
-        cor = COR_PROT if favoravel else COR_RISCO
+        cor = COR_PROT if OR_ < 1 else COR_RISCO
         sig = (p_ is not None) and not np.isnan(p_) and (p_ < 0.05)
 
         lo_plot = max(lo_, xlim[0] * 1.02)
@@ -214,15 +210,15 @@ def draw_panel(ax, col_or, col_lo, col_hi, col_p, title, xlim):
 
 
 draw_panel(ax_or, "OR", "IC_inf", "IC_sup", "p_OR",
-           "OR bruto (IC 95%)", xlim=(0.02, 30))
+           "OR bruto (IC 95%)", xlim=(0.03, 3))
 draw_panel(ax_ora, "ORa", "ICa_inf", "ICa_sup", "p_ORa",
-           "OR ajustado (IC 95%)", xlim=(0.02, 30))
+           "OR ajustado (IC 95%)", xlim=(0.03, 3))
 
 legend_elements = [
     mpatches.Patch(facecolor=COR_PROT, edgecolor=COR_PROT,
-                   label="Favorável (menos óbito / mais alta)"),
+                   label="Fator protetor (OR < 1, menos óbito)"),
     mpatches.Patch(facecolor=COR_RISCO, edgecolor=COR_RISCO,
-                   label="Desfavorável (mais óbito / menos alta)"),
+                   label="Fator de risco (OR > 1, mais óbito)"),
     Line2D([0], [0], marker="D", color="none", markerfacecolor=TEXT,
            markeredgecolor=TEXT, markersize=5, label="Losango = p < 0,05"),
     Line2D([0], [0], marker="o", color="none", markerfacecolor=BG,
