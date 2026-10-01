@@ -115,10 +115,16 @@ def estatisticas(d):
     return dict(
         n_completo=n_completo, ob_completo=ob_completo,
         pct_completo=100 * ob_completo / n_completo,
+        alta_completo=n_completo - ob_completo,
+        pct_alta_completo=100 * (n_completo - ob_completo) / n_completo,
         n_incompleto=n_incompleto, ob_incompleto=ob_incompleto,
         pct_incompleto=100 * ob_incompleto / n_incompleto,
+        alta_incompleto=n_incompleto - ob_incompleto,
+        pct_alta_incompleto=100 * (n_incompleto - ob_incompleto) / n_incompleto,
         n_nao_vac=n_nao_vac, ob_nao_vac=ob_nao_vac,
         pct_nao_vac=100 * ob_nao_vac / n_nao_vac if n_nao_vac else np.nan,
+        alta_nao_vac=n_nao_vac - ob_nao_vac,
+        pct_alta_nao_vac=100 * (n_nao_vac - ob_nao_vac) / n_nao_vac if n_nao_vac else np.nan,
         OR=orr, IC=ci, p_logit=p_logit, p_fisher=p_fisher,
     )
 
@@ -140,80 +146,76 @@ for nome, r in resultados.items():
 print("=" * 90)
 
 # ════════════════════════════════════════════════════════════
-# 2. FIGURA: LINE PLOT — % óbito por grupo (Não vacinado → Incompleto →
-#    Completo), uma linha por versão da base de dados
+# 2. FIGURA: LINE PLOT — um painel por planilha/versão; dentro de cada
+#    painel, Esquema (Não vacinado → Incompleto → Completo) no eixo x e
+#    duas linhas: % Óbito e % Alta
 # ════════════════════════════════════════════════════════════
-CORES_VERSAO = {
-    "New_pacientes703.xlsx\n(doses/óbito atualizados)": "#1D9E75",
-    "703pacientes.xlsx\n(versão anterior)": "#3A6EA5",
-}
-MARCADORES_VERSAO = {
-    "New_pacientes703.xlsx\n(doses/óbito atualizados)": "o",
-    "703pacientes.xlsx\n(versão anterior)": "s",
-}
-
 categorias = ["Não vacinado", "Incompleto", "Completo"]
 x = np.arange(len(categorias))
 
-fig, ax = plt.subplots(figsize=(10.5, 7), facecolor=BG)
+fig, axes = plt.subplots(1, 2, figsize=(14, 6.5), facecolor=BG, sharey=True)
 
-for nome, r in resultados.items():
-    y = [r["pct_nao_vac"], r["pct_incompleto"], r["pct_completo"]]
+for ax, (nome, r) in zip(axes, resultados.items()):
+    y_obito = [r["pct_nao_vac"], r["pct_incompleto"], r["pct_completo"]]
+    y_alta = [r["pct_alta_nao_vac"], r["pct_alta_incompleto"], r["pct_alta_completo"]]
     ns = [r["n_nao_vac"], r["n_incompleto"], r["n_completo"]]
-    ob = [r["ob_nao_vac"], r["ob_incompleto"], r["ob_completo"]]
-    cor = CORES_VERSAO[nome]
-    marcador = MARCADORES_VERSAO[nome]
+    obs = [r["ob_nao_vac"], r["ob_incompleto"], r["ob_completo"]]
+    altas = [r["alta_nao_vac"], r["alta_incompleto"], r["alta_completo"]]
 
-    ax.plot(x, y, color=cor, marker=marcador, markersize=9, linewidth=2.4,
-            label=nome.replace("\n", " "), zorder=3)
-    for xi, yi, n, o in zip(x, y, ns, ob):
-        deslocamento = 14 if nome.startswith("New") else -14
-        va = "bottom" if nome.startswith("New") else "top"
+    ax.plot(x, y_obito, color=COR_INCOMPLETO, marker="o", markersize=9,
+            linewidth=2.4, label="Óbito", zorder=3)
+    ax.plot(x, y_alta, color=COR_COMPLETO, marker="o", markersize=9,
+            linewidth=2.4, label="Alta", zorder=3)
+
+    for xi, yi in zip(x, y_obito):
         ax.annotate(f"{yi:.1f}%", (xi, yi), textcoords="offset points",
-                    xytext=(0, deslocamento), ha="center", va=va,
-                    fontsize=11, fontweight="bold", color=cor)
+                    xytext=(0, 12), ha="center", va="bottom", fontsize=11,
+                    fontweight="bold", color=COR_INCOMPLETO)
+    for xi, yi in zip(x, y_alta):
+        ax.annotate(f"{yi:.1f}%", (xi, yi), textcoords="offset points",
+                    xytext=(0, -14), ha="center", va="top", fontsize=11,
+                    fontweight="bold", color=COR_COMPLETO)
 
-ax.set_xticks(x)
-ax.set_xticklabels(categorias, fontsize=12.5, color=TEXT)
-ax.set_ylabel("Óbito hospitalar (%)", fontsize=12, color=SUBTEXT)
-ax.set_ylim(0, 95)
-ax.set_xlim(-0.3, len(categorias) - 0.7)
-ax.grid(axis="y", alpha=0.25, zorder=0)
-for spine in ("top", "right"):
-    ax.spines[spine].set_visible(False)
-ax.tick_params(axis="y", labelsize=10, colors=SUBTEXT)
+    for xi, n, o, a in zip(x, ns, obs, altas):
+        ax.text(xi, -0.15, f"n={n}\nóbitos={o} | altas={a}",
+                transform=ax.get_xaxis_transform(), ha="center", va="top",
+                fontsize=9, color=SUBTEXT)
 
-# n= / óbitos= de cada ponto (uma versão por vez, para não poluir)
-nome_new = [n for n in resultados if n.startswith("New")][0]
-for xi, n, o in zip(x, [resultados[nome_new]["n_nao_vac"],
-                        resultados[nome_new]["n_incompleto"],
-                        resultados[nome_new]["n_completo"]],
-                    [resultados[nome_new]["ob_nao_vac"],
-                     resultados[nome_new]["ob_incompleto"],
-                     resultados[nome_new]["ob_completo"]]):
-    ax.text(xi, -0.14, f"n={n}\nóbitos={o}", transform=ax.get_xaxis_transform(),
-            ha="center", va="top", fontsize=9, color=SUBTEXT)
+    ax.set_xticks(x)
+    ax.set_xticklabels(categorias, fontsize=12, color=TEXT)
+    ax.set_xlim(-0.3, len(categorias) - 0.7)
+    ax.set_title(nome, fontsize=13, fontweight="bold", color=TEXT, pad=14)
+    ax.grid(axis="y", alpha=0.25, zorder=0)
+    for spine in ("top", "right"):
+        ax.spines[spine].set_visible(False)
+    ax.tick_params(axis="y", labelsize=10, colors=SUBTEXT)
 
-ax.legend(loc="upper center", bbox_to_anchor=(0.5, 1.14), ncol=1, frameon=False,
-          fontsize=10.5, labelcolor=TEXT)
+    caixa = dict(boxstyle="round,pad=0.4", fc="white", ec="#D0D7DE",
+                 alpha=0.95, linewidth=0.8)
+    ax.text(0.5, 0.995,
+            f"Completo vs. incompleto: OR={r['OR']:.2f} "
+            f"({r['IC'][0]:.2f}–{r['IC'][1]:.2f})  {formata_p(r['p_logit'])}",
+            transform=ax.transAxes, ha="center", va="top", fontsize=9.5,
+            color=TEXT, bbox=caixa)
 
-caixa = dict(boxstyle="round,pad=0.45", fc="white", ec="#D0D7DE",
-             alpha=0.95, linewidth=0.8)
-texto_caixa = "Esquema completo vs. incompleto (regressão logística):\n" + "\n".join(
-    f"{nome.split(chr(10))[0]}: OR={r['OR']:.2f} "
-    f"({r['IC'][0]:.2f}–{r['IC'][1]:.2f}), {formata_p(r['p_logit'])}"
-    for nome, r in resultados.items())
-ax.text(0.98, 0.97, texto_caixa, transform=ax.transAxes, ha="right", va="top",
-        fontsize=9.5, color=TEXT, bbox=caixa)
+axes[0].set_ylabel("% de pacientes", fontsize=12, color=SUBTEXT)
+axes[0].set_ylim(0, 100)
 
-fig.suptitle("Esquema Vacinal Completo vs. Incompleto e Óbito Hospitalar",
-             fontsize=17, fontweight="bold", color=TEXT, y=1.03)
-fig.text(0.5, 0.975,
+handles = [plt.Line2D([0], [0], color=COR_INCOMPLETO, marker="o", linewidth=2.4,
+                       label="Óbito"),
+           plt.Line2D([0], [0], color=COR_COMPLETO, marker="o", linewidth=2.4,
+                      label="Alta")]
+fig.legend(handles=handles, loc="upper center", bbox_to_anchor=(0.5, 1.0),
+           ncol=2, frameon=False, fontsize=11, labelcolor=TEXT)
+
+fig.suptitle("Esquema Vacinal Completo vs. Incompleto — Óbito e Alta Hospitalar",
+             fontsize=17, fontweight="bold", color=TEXT, y=1.15)
+fig.text(0.5, 1.09,
          "Completo = 2 doses (Pfizer/AstraZeneca/Coronavac) ou 1 dose "
          "(Janssen) | Incompleto = menos doses que o esquema completo",
          ha="center", va="top", fontsize=10.5, color=SUBTEXT)
 
-plt.tight_layout(rect=[0, 0.03, 1, 0.97])
+plt.tight_layout(rect=[0, 0.05, 1, 0.90])
 plt.savefig(OUTPUT_PNG, dpi=180, bbox_inches="tight", facecolor=BG)
 
 _buf_png = OUTPUT_PNG.replace(".png", "_300dpi_tmp.png")
