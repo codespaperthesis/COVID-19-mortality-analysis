@@ -124,7 +124,7 @@ def sig_stars(p):
 
 
 n_rows = len(df_raw)
-POL_CABECALHO = 2.7  # título + subtítulo + legenda, em polegadas
+POL_CABECALHO = 3.0  # título + subtítulo + legenda, em polegadas
 POL_RODAPE = 0.85    # rótulo do eixo x
 altura_conteudo = n_rows * 0.9 + 1.2
 fig_h = POL_CABECALHO + altura_conteudo + POL_RODAPE
@@ -230,10 +230,10 @@ legend_elements = [
 # Posições em fração de figura, mas definidas a partir de polegadas
 # contadas do topo (1 - polegadas/fig_h) — mais previsível que valores
 # fixos de fração, pois se adapta à altura real da figura.
-y_titulo = 1 - 0.40 / fig_h
-y_subtitulo = 1 - 0.80 / fig_h
-y_divisor = 1 - 1.10 / fig_h
-y_legenda = 1 - 1.55 / fig_h
+y_titulo = 1 - 0.42 / fig_h
+y_subtitulo = 1 - 1.05 / fig_h
+y_divisor = 1 - 1.35 / fig_h
+y_legenda = 1 - 1.80 / fig_h
 
 fig.text(0.50, y_titulo,
           "Forest Plot — Esquema Vacinal Incompleto vs. Completo",
