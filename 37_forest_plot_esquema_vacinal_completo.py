@@ -124,10 +124,17 @@ def sig_stars(p):
 
 
 n_rows = len(df_raw)
-fig_h = max(4.5, n_rows * 0.9 + 3.0)
+POL_CABECALHO = 2.7  # título + subtítulo + legenda, em polegadas
+POL_RODAPE = 0.85    # rótulo do eixo x
+altura_conteudo = n_rows * 0.9 + 1.2
+fig_h = POL_CABECALHO + altura_conteudo + POL_RODAPE
+top_frac = 1 - POL_CABECALHO / fig_h
+bottom_frac = POL_RODAPE / fig_h
+
 fig, axes = plt.subplots(
     1, 4, figsize=(16, fig_h), facecolor=BG,
-    gridspec_kw={"width_ratios": [2.5, 5, 2.5, 5], "wspace": 0.04},
+    gridspec_kw={"width_ratios": [2.5, 5, 2.5, 5], "wspace": 0.04,
+                 "top": top_frac, "bottom": bottom_frac},
 )
 ax_labels, ax_or, ax_gap, ax_ora = axes
 ax_gap.set_visible(False)
@@ -220,21 +227,29 @@ legend_elements = [
     Line2D([0], [0], color=GOLD, linewidth=1.2, linestyle="--",
            label="Linha de referência (OR = 1)"),
 ]
-fig.text(0.50, 1.14,
+# Posições em fração de figura, mas definidas a partir de polegadas
+# contadas do topo (1 - polegadas/fig_h) — mais previsível que valores
+# fixos de fração, pois se adapta à altura real da figura.
+y_titulo = 1 - 0.40 / fig_h
+y_subtitulo = 1 - 0.80 / fig_h
+y_divisor = 1 - 1.10 / fig_h
+y_legenda = 1 - 1.55 / fig_h
+
+fig.text(0.50, y_titulo,
           "Forest Plot — Esquema Vacinal Incompleto vs. Completo",
           ha="center", va="top", fontsize=30, fontweight="bold", color=TEXT)
-subtitle = (f"Referência: esquema completo (Ecompleto) | Exposição: "
-            f"esquema incompleto (Eincompleto) | n = {n_total} "
-            f"(Completo={n_completo}, Incompleto={n_incompleto})")
-fig.text(0.50, 1.02, subtitle, ha="center", va="top", fontsize=17, color=SUBTEXT)
-fig.add_artist(plt.Line2D([0.13, 0.97], [0.96, 0.96], transform=fig.transFigure,
-                           color=BORDER, linewidth=1.8))
+subtitle = (f"Referência: esquema completo | Exposição: esquema "
+            f"incompleto | n = {n_total} (Completo={n_completo}, "
+            f"Incompleto={n_incompleto})")
+fig.text(0.50, y_subtitulo, subtitle, ha="center", va="top", fontsize=17,
+          color=SUBTEXT)
+fig.add_artist(plt.Line2D([0.13, 0.97], [y_divisor, y_divisor],
+                           transform=fig.transFigure, color=BORDER, linewidth=1.8))
 
-fig.legend(handles=legend_elements, loc="upper center", bbox_to_anchor=(0.5, 0.90),
-           ncol=5, frameon=False, fontsize=11.5, labelcolor=TEXT,
-           columnspacing=1.4, handlelength=1.3)
+fig.legend(handles=legend_elements, loc="upper center",
+           bbox_to_anchor=(0.5, y_legenda), ncol=5, frameon=False,
+           fontsize=11.5, labelcolor=TEXT, columnspacing=1.4, handlelength=1.3)
 
-plt.tight_layout(rect=[0, 0, 1, 2.3])
 plt.savefig(OUTPUT_PNG, dpi=180, bbox_inches="tight", facecolor=BG)
 
 _buf_png600 = OUTPUT_PNG.replace(".png", "_600dpi_tmp.png")
