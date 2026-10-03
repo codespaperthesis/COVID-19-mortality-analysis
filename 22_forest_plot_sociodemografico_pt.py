@@ -163,10 +163,10 @@ def sig_stars(p):
 
 
 n_rows = len(LINHAS)
-row_h = 0.72
-fig_h = n_rows * row_h + 1.9
+row_h = 1.0
+fig_h = n_rows * row_h + 2.6
 fig, axes = plt.subplots(
-    1, 4, figsize=(19, fig_h), facecolor=BG,
+    1, 4, figsize=(24, fig_h), facecolor=BG,
     gridspec_kw={"width_ratios": [3.8, 4.6, 2.2, 4.6], "wspace": 0.04},
 )
 ax_labels, ax_c, ax_gap, ax_a = axes
@@ -195,15 +195,15 @@ for i, linha in enumerate(LINHAS):
 ax_labels.set_xlim(0, 1)
 for i, linha in enumerate(LINHAS):
     if linha["tipo"] == "header":
-        ax_labels.text(0.0, i, linha["label"], color=TEXT, fontsize=17,
+        ax_labels.text(0.0, i, linha["label"], color=TEXT, fontsize=24,
                        fontweight="bold", va="center", ha="left")
     else:
-        fs = 12.5 if len(linha["label"]) > 20 else 15
+        fs = 17 if len(linha["label"]) > 20 else 21
         ax_labels.text(0.04, i, linha["label"], color=TEXT, fontsize=fs,
                        va="center", ha="left")
         n = linha["n"]
         ax_labels.text(0.98, i, f"n = {n} ({pct(n):.0f}%)", color=MUTED,
-                       fontsize=12.5, style="italic", va="center", ha="right")
+                       fontsize=17, style="italic", va="center", ha="right")
 
 for ax, key, titulo, xlim, nrow in [
     (ax_c, "crude", "OR bruto (IC 95%)", (0.05, 150), n_total),
@@ -213,21 +213,21 @@ for ax, key, titulo, xlim, nrow in [
     ax.set_xscale("log")
     ax.set_xlim(*xlim)
     ax.xaxis.grid(False)
-    ax.axvline(1.0, color=GOLD, linewidth=1.8, linestyle="--", zorder=2, alpha=0.9)
-    ax.set_title(titulo, fontsize=17, fontweight="bold", color=TEXT, pad=10)
-    ax.tick_params(axis="x", labelsize=12.5, colors=SUBTEXT)
+    ax.axvline(1.0, color=GOLD, linewidth=2.2, linestyle="--", zorder=2, alpha=0.9)
+    ax.set_title(titulo, fontsize=24, fontweight="bold", color=TEXT, pad=14)
+    ax.tick_params(axis="x", labelsize=17, colors=SUBTEXT)
 
     for i, linha in enumerate(LINHAS):
         if linha["tipo"] == "header":
             continue
         if linha["tipo"] == "ref":
             ax.text(0.5, i, "ref.", transform=ax.get_yaxis_transform(),
-                    ha="center", va="center", fontsize=13, color=MUTED, style="italic")
+                    ha="center", va="center", fontsize=18, color=MUTED, style="italic")
             continue
         if linha["tipo"] == "inestimavel":
-            ax.plot(1.0, i, marker="D", markersize=9, color=COR_INEST, zorder=5)
+            ax.plot(1.0, i, marker="D", markersize=12, color=COR_INEST, zorder=5)
             ax.text(1.35, i, "—", transform=ax.get_yaxis_transform(),
-                    ha="left", va="center", fontsize=15, color=COR_INEST)
+                    ha="left", va="center", fontsize=20, color=COR_INEST)
             continue
 
         OR, lo, hi, p = linha[key]
@@ -235,16 +235,16 @@ for ax, key, titulo, xlim, nrow in [
         sig = p < 0.05
         lo_plot = max(lo, xlim[0] * 1.05)
         hi_plot = min(hi, xlim[1] * 0.95)
-        ax.plot([lo_plot, hi_plot], [i, i], color=cor, linewidth=3.0, zorder=3,
+        ax.plot([lo_plot, hi_plot], [i, i], color=cor, linewidth=3.8, zorder=3,
                 alpha=0.85, solid_capstyle="round")
-        ax.plot(OR, i, marker="D" if sig else "o", markersize=9.5 if sig else 8.5,
+        ax.plot(OR, i, marker="D" if sig else "o", markersize=12.5 if sig else 11.5,
                 color=cor, markerfacecolor=cor if sig else BG,
-                markeredgecolor=cor, markeredgewidth=1.6, zorder=5)
+                markeredgecolor=cor, markeredgewidth=1.8, zorder=5)
         txt = f"{OR:.2f} ({lo:.2f}–{hi:.2f}){sig_stars(p)}"
         ax.text(1.0, i, txt, transform=ax.get_yaxis_transform(),
-                ha="left", va="center", fontsize=13, color=TEXT, clip_on=False)
+                ha="left", va="center", fontsize=18, color=TEXT, clip_on=False)
 
-    ax.set_xlabel("Razão de Chances (escala log)", fontsize=13, color=SUBTEXT, labelpad=8)
+    ax.set_xlabel("Razão de Chances (escala log)", fontsize=18, color=SUBTEXT, labelpad=10)
 
 # ── Legenda ───────────────────────────────────────────────────────────────
 legend_elements = [
@@ -256,16 +256,16 @@ legend_elements = [
            markeredgewidth=1.2, markersize=7, label="Círculo aberto = p ≥ 0,05"),
     Line2D([0], [0], color=GOLD, linewidth=1.4, linestyle="--", label="Linha de referência (OR = 1)"),
 ]
-fig.legend(handles=legend_elements, fontsize=12.5, frameon=False, ncol=5,
-           loc="upper center", bbox_to_anchor=(0.5, 1.0), labelcolor=TEXT,
-           handletextpad=0.6, columnspacing=1.6)
+fig.legend(handles=legend_elements, fontsize=18, frameon=False, ncol=3,
+           loc="upper center", bbox_to_anchor=(0.5, 0.975), labelcolor=TEXT,
+           handletextpad=0.6, columnspacing=1.8)
 
 fig.suptitle("Forest Plot — Razão de Chances Bruta e Ajustada",
-             fontsize=23, fontweight="bold", color=TEXT, x=0.015, ha="left", y=1.08)
-fig.text(0.015, 1.035, f"Variáveis sociodemográficas  |  n = {n_total}",
-          ha="left", va="top", fontsize=15, color=SUBTEXT)
+             fontsize=32, fontweight="bold", color=TEXT, x=0.015, ha="left", y=1.07)
+fig.text(0.015, 1.025, f"Variáveis sociodemográficas  |  n = {n_total}",
+          ha="left", va="top", fontsize=21, color=SUBTEXT)
 
-fig.subplots_adjust(top=0.90, bottom=0.075, left=0.01, right=0.99)
+fig.subplots_adjust(top=0.885, bottom=0.06, left=0.01, right=0.99)
 
 for ext, dpi in [("png", 180)]:
     out_path = os.path.join(BASE_DIR, f"forest_sociodemografico_pt.{ext}")
