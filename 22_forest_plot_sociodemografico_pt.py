@@ -166,8 +166,8 @@ n_rows = len(LINHAS)
 row_h = 0.72
 fig_h = n_rows * row_h + 1.9
 fig, axes = plt.subplots(
-    1, 4, figsize=(20, fig_h), facecolor=BG,
-    gridspec_kw={"width_ratios": [4.6, 4.6, 1.8, 4.6], "wspace": 0.04},
+    1, 4, figsize=(19, fig_h), facecolor=BG,
+    gridspec_kw={"width_ratios": [3.8, 4.6, 2.2, 4.6], "wspace": 0.04},
 )
 ax_labels, ax_c, ax_gap, ax_a = axes
 ax_gap.set_visible(False)
@@ -256,16 +256,16 @@ legend_elements = [
            markeredgewidth=1.2, markersize=7, label="Círculo aberto = p ≥ 0,05"),
     Line2D([0], [0], color=GOLD, linewidth=1.4, linestyle="--", label="Linha de referência (OR = 1)"),
 ]
-fig.legend(handles=legend_elements, fontsize=12.5, frameon=False, ncol=3,
+fig.legend(handles=legend_elements, fontsize=12.5, frameon=False, ncol=5,
            loc="upper center", bbox_to_anchor=(0.5, 1.0), labelcolor=TEXT,
            handletextpad=0.6, columnspacing=1.6)
 
 fig.suptitle("Forest Plot — Razão de Chances Bruta e Ajustada",
-             fontsize=23, fontweight="bold", color=TEXT, x=0.015, ha="left", y=1.11)
-fig.text(0.015, 1.055, f"Variáveis sociodemográficas  |  n = {n_total}",
+             fontsize=23, fontweight="bold", color=TEXT, x=0.015, ha="left", y=1.08)
+fig.text(0.015, 1.035, f"Variáveis sociodemográficas  |  n = {n_total}",
           ha="left", va="top", fontsize=15, color=SUBTEXT)
 
-fig.subplots_adjust(top=0.88, bottom=0.075, left=0.01, right=0.99)
+fig.subplots_adjust(top=0.90, bottom=0.075, left=0.01, right=0.99)
 
 for ext, dpi in [("png", 180)]:
     out_path = os.path.join(BASE_DIR, f"forest_sociodemografico_pt.{ext}")
