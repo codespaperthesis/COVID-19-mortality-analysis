@@ -36,10 +36,16 @@ COR_COMPLETO = "#1D9E75"
 # ════════════════════════════════════════════════════════════
 # 1. CARREGAR DADOS (restritos a 2021-2022, período com vacinação)
 # ════════════════════════════════════════════════════════════
-dados = pd.read_excel(XLSX_PATH)
-dados["Data de Entrada"] = pd.to_datetime(dados["Data de Entrada"])
-dados["Ano"] = dados["Data de Entrada"].dt.year
-dados = dados[dados["Ano"].isin([2021, 2022])].copy()
+dados_completo_periodo = pd.read_excel(XLSX_PATH)
+dados_completo_periodo["Data de Entrada"] = pd.to_datetime(
+    dados_completo_periodo["Data de Entrada"])
+dados_completo_periodo["Ano"] = dados_completo_periodo["Data de Entrada"].dt.year
+n_incompleto_todos_anos = int((dados_completo_periodo["Eincompleto"] == 1).sum())
+n_excluidos_2020 = int(((dados_completo_periodo["Eincompleto"] == 1) &
+                        (dados_completo_periodo["Ano"] == 2020)).sum())
+
+dados = dados_completo_periodo[
+    dados_completo_periodo["Ano"].isin([2021, 2022])].copy()
 
 assert ((dados["Ecompleto"] + dados["Eincompleto"]) == 1).all(), (
     "Ecompleto e Eincompleto deveriam ser mutuamente exclusivos e cobrir "
@@ -157,8 +163,19 @@ fig.text(0.5, 0.955,
           f"Esquema incompleto: n={n_incompleto} | Esquema completo: n={n_completo} | "
           "evento = óbito (alta = censura) | HR = razão de risco (hazard ratio)",
           ha="center", va="top", fontsize=11.5, color=SUBTEXT)
+fig.text(0.5, -0.02,
+          f"Nota: restrito a pacientes admitidos em 2021-2022, período em "
+          f"que a vacinação já existia. Por isso o n do esquema incompleto "
+          f"aqui ({n_incompleto}) é menor do que no forest plot "
+          f"({n_incompleto_todos_anos}, todos os anos): "
+          f"{n_excluidos_2020} pacientes com esquema incompleto admitidos "
+          f"em 2020 (antes de haver vacina) foram excluídos desta análise "
+          f"de sobrevida. O n do esquema completo ({n_completo}) não muda, "
+          f"pois nenhum paciente completou o esquema vacinal em 2020.",
+          ha="center", va="top", fontsize=10, style="italic", color=SUBTEXT,
+          wrap=True)
 
-plt.tight_layout(rect=[0, 0, 1, 0.94])
+plt.tight_layout(rect=[0, 0.04, 1, 0.94])
 plt.savefig(OUTPUT_PNG, dpi=180, bbox_inches="tight", facecolor=BG)
 
 # TIFF com compressão LZW (o TIFF sem compressão do matplotlib passa de 50MB)
