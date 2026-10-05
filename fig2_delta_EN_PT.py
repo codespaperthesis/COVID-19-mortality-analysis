@@ -32,6 +32,7 @@ LANG = {
         unit1={"age": "year", "los": "day"},
         stats="Md = {med} (95% CI {lo}–{hi}); IQR {q1}–{q3}; x̄ = {mean} ± {sd}; max = {mx}",
         model="Negative binomial model: IRR = {irr} (95% CI {lo}–{hi}); {p}",
+        mw="Mann–Whitney U test: p < 0.001; Shapiro–Wilk: W = 0.897; p < 0.001",
         pless="p < 0.001", peq="p = {p}",
         delta="ΔMd = {d} {u}",
         legend=["Median (bootstrap 95% CI)", "IQR (P25–P75)", "Mean", "Individual patients",
@@ -45,6 +46,7 @@ LANG = {
         unit1={"age": "ano", "los": "dia"},
         stats="Md = {med} (IC 95% {lo}–{hi}); IIQ {q1}–{q3}; x̄ = {mean} ± {sd}; máx. = {mx}",
         model="Modelo binomial negativo: RTI = {irr} (IC 95% {lo}–{hi}); {p}",
+        mw="Teste de Mann-Whitney: p < 0,001; Shapiro-Wilk: W = 0,897; p < 0,001",
         pless="p < 0,001", peq="p = {p}",
         delta="ΔMd = {d} {u}",
         legend=["Mediana (IC 95% bootstrap)", "IIQ (P25–P75)", "Média", "Pacientes individuais",
@@ -155,8 +157,11 @@ def panel(ax, var, st, nb, L, jitter_seed):
 
     irr, lo, hi, p = nb
     ptxt = L["pless"] if p < 0.001 else L["peq"].format(p=num(p, 3, L))
-    ax.set_title(L["model"].format(irr=num(irr, 2, L), lo=num(lo, 2, L), hi=num(hi, 2, L), p=ptxt),
-                 loc="right", fontsize=9, color=TEXT)
+    if var == "age":   # panel A: Mann-Whitney (Shapiro-Wilk rejects normality)
+        title = L["mw"]
+    else:
+        title = L["model"].format(irr=num(irr, 2, L), lo=num(lo, 2, L), hi=num(hi, 2, L), p=ptxt)
+    ax.set_title(title, loc="right", fontsize=9, color=TEXT)
 
     xmax = max(s["x"].max() for s in st.values())
     ax.set_xlim(-2, np.ceil((xmax + 5) / 10) * 10)
