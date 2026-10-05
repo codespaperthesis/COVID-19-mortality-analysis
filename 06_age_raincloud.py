@@ -18,16 +18,25 @@ def _register_arial():
         if os.path.exists(path):
             fm.fontManager.addfont(path)
             return
-    import urllib.request
-    dest = os.path.join(os.path.expanduser("~"), "Arial.ttf")
-    if not os.path.exists(dest):
-        url = "https://github.com/matomo-org/travis-scripts/raw/master/fonts/Arial.ttf"
-        urllib.request.urlretrieve(url, dest)
-    fm.fontManager.addfont(dest)
+    try:
+        import urllib.request
+        dest = os.path.join(os.path.expanduser("~"), "Arial.ttf")
+        if not os.path.exists(dest):
+            url = "https://github.com/matomo-org/travis-scripts/raw/master/fonts/Arial.ttf"
+            urllib.request.urlretrieve(url, dest)
+        fm.fontManager.addfont(dest)
+    except Exception:
+        # Sem acesso à rede/Arial: cai para uma fonte métrico-compatível
+        # já presente no sistema (Liberation Sans), em vez de travar.
+        liberation = "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf"
+        if os.path.exists(liberation):
+            fm.fontManager.addfont(liberation)
+            return "Liberation Sans"
+    return "Arial"
 
 
-_register_arial()
-mpl.rcParams["font.family"] = "Arial"
+_FONTE = _register_arial() or "Arial"
+mpl.rcParams["font.family"] = _FONTE
 
 import numpy as np
 import pandas as pd
@@ -35,8 +44,7 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 import matplotlib.lines as mlines
 from matplotlib.patches import FancyBboxPatch
-from scipy.stats import gaussian_kde
-import statsmodels.formula.api as smf
+from scipy.stats import gaussian_kde, mannwhitneyu
 
 # ── Output directory ──────────────────────────────────────────────────────
 OUTPUT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -73,19 +81,13 @@ def simular(g, seed):
 
 amostras = {k: simular(v, i * 7) for i, (k, v) in enumerate(grupos.items())}
 
-# ── Negative Binomial regression: Age ~ Outcome ────────────────────────────
-idade_disc = amostras["Discharge"].astype(int)
-idade_death = amostras["Death"].astype(int)
-df_nb = pd.DataFrame({
-    "idade": np.concatenate([idade_disc, idade_death]),
-    "desfecho": np.array([0] * len(idade_disc) + [1] * len(idade_death)),
-})
-df_nb["idade"] = df_nb["idade"].clip(lower=1)
-modelo_nb = smf.negativebinomial("idade ~ desfecho", data=df_nb).fit(disp=False)
-beta = modelo_nb.params["desfecho"]
-ci_low = modelo_nb.conf_int().loc["desfecho", 0]
-ci_hi = modelo_nb.conf_int().loc["desfecho", 1]
-p_val = modelo_nb.pvalues["desfecho"]
+# ── Mann-Whitney U test: Age, Discharge vs Death ───────────────────────────
+# Age is a continuous, non-count variable, so it is compared with a
+# non-parametric rank test (Mann-Whitney U) rather than a count-data
+# regression (Negative Binomial/RTI, reserved for length-of-stay).
+idade_disc = amostras["Discharge"]
+idade_death = amostras["Death"]
+u_stat, p_val = mannwhitneyu(idade_death, idade_disc, alternative="two-sided")
 
 if p_val < 0.001:
     p_str = "p < 0.001"
@@ -100,11 +102,9 @@ else:
     p_str = f"p = {p_val:.3f}"
     sig = "ns"
 
-print("\n── Negative Binomial regression: Age ~ Outcome ──")
-print(f"  β = {beta:.4f}")
-print(f"  95% CI = [{ci_low:.4f}, {ci_hi:.4f}]")
+print("\n── Mann-Whitney U test: Age, Death vs Discharge ──")
+print(f"  U = {u_stat:.1f}")
 print(f"  {p_str} ({sig})")
-print(modelo_nb.summary())
 
 # ── Median delta (Death – Discharge) ───────────────────────────────────────
 delta_med = grupos["Death"]["med"] - grupos["Discharge"]["med"]  # +39
@@ -160,15 +160,15 @@ for i, (nome, g) in enumerate(grupos.items()):
     # 4. Statistical annotations
     ax.text(g["med"] + 1, by + BH - 0.05,
             f"Md={g['med']:.0f}", fontsize=15,
-            color=cor, fontweight="bold", va="bottom", fontfamily="Arial")
+            color=cor, fontweight="bold", va="bottom", fontfamily=_FONTE)
     ax.text(g["xbar"] + 1, by - BH - 0.03,
-            f"x̄={g['xbar']:.1f}", fontsize=15, color="gray", va="top", fontfamily="Arial")
+            f"x̄={g['xbar']:.1f}", fontsize=15, color="gray", va="top", fontfamily=_FONTE)
     ax.text(-1, by,
             f"Q1={g['q1']:.0f}",
-            fontsize=15, color=cor, ha="right", va="center", fontfamily="Arial")
+            fontsize=15, color=cor, ha="right", va="center", fontfamily=_FONTE)
     ax.text(103, by,
             f"Q3={g['q3']:.0f}",
-            fontsize=15, color=cor, ha="left", va="center", fontfamily="Arial")
+            fontsize=15, color=cor, ha="left", va="center", fontfamily=_FONTE)
 
 # ── Median delta: Discharge → Death arrow ──────────────────────────────────
 y_disc_box = ys[0] - 0.30  # Discharge box center y
@@ -210,27 +210,26 @@ ax.text(
     y_arrow_mid + 0.08,
     f"Δ Md = {sign_str} yrs",
     fontsize=14, color="#555", fontweight="bold",
-    ha="center", va="bottom", fontfamily="Arial",
+    ha="center", va="bottom", fontfamily=_FONTE,
     bbox=dict(boxstyle="round,pad=0.25", facecolor="white",
               edgecolor="#bbb", alpha=0.85),
     zorder=8,
 )
 
-# ── Significance bar with the NB result (Discharge ↔ Death) ────────────────
+# ── Significance bar with the Mann-Whitney result (Discharge ↔ Death) ──────
 x_bar = 102
 ax.annotate("", xy=(x_bar, y_death_box), xytext=(x_bar, y_disc_box),
             arrowprops=dict(arrowstyle="-", color="#444", lw=1.0))
 ax.hlines([y_disc_box, y_death_box], x_bar - 0.5, x_bar, colors="#444", lw=1.0)
-nb_txt = (
-    f"NB Regression\n"
-    f"β = {beta:.3f}\n"
-    f"95% CI [{ci_low:.3f}, {ci_hi:.3f}]\n"
+mw_txt = (
+    f"Mann-Whitney U\n"
+    f"U = {u_stat:.0f}\n"
     f"{p_str} {sig}"
 )
 ax.text(x_bar + 0.8, (y_disc_box + y_death_box) / 2,
-        nb_txt,
+        mw_txt,
         fontsize=13, color="#333", fontweight="bold",
-        va="center", ha="left", fontfamily="Arial",
+        va="center", ha="left", fontfamily=_FONTE,
         linespacing=1.6)
 
 # ── Y-axis: custom labels (name + n below) ─────────────────────────────────
@@ -248,7 +247,7 @@ for i, nome in enumerate(labels):
         LABEL_X, y0 + 0.08,
         nome,
         fontsize=20, fontweight="bold", color=cor,
-        ha="right", va="center", fontfamily="Arial",
+        ha="right", va="center", fontfamily=_FONTE,
         transform=ax.transData,
     )
     # Line 2: n= (smaller, same alignment)
@@ -256,14 +255,14 @@ for i, nome in enumerate(labels):
         LABEL_X, y0 - 0.09,
         f"n = {grupos[nome]['n']}",
         fontsize=18, fontweight="bold", color="#888",
-        ha="right", va="center", fontfamily="Arial",
+        ha="right", va="center", fontfamily=_FONTE,
         transform=ax.transData,
     )
 
 # ── Axes ──────────────────────────────────────────────────────────────────
 ax.set_xlim(-5, 125)
 ax.set_ylim(-0.75, len(grupos) - 0.3)
-ax.set_xlabel("Age (years)", fontsize=18, color="#555", fontfamily="Arial")
+ax.set_xlabel("Age (years)", fontsize=18, color="#555", fontfamily=_FONTE)
 ax.xaxis.set_tick_params(labelsize=10, labelcolor="#666")
 ax.xaxis.set_major_locator(plt.MultipleLocator(10))
 ax.grid(axis="x", color="#ddd", linewidth=0.7, linestyle="--", alpha=0.8, zorder=0)
@@ -271,7 +270,7 @@ ax.spines[["top", "right"]].set_visible(False)
 ax.spines[["left", "bottom"]].set_color("#ccc")
 ax.tick_params(axis="y", length=0)  # remove y-axis tick marks
 for lbl in ax.get_xticklabels():
-    lbl.set_fontfamily("Arial")
+    lbl.set_fontfamily(_FONTE)
 
 # ── Legend ────────────────────────────────────────────────────────────────
 patches = [mpatches.Patch(facecolor=CORES[k] + "55",
@@ -285,7 +284,7 @@ l_jit = mlines.Line2D([], [], marker="o", color="gray",
 leg = ax.legend(handles=[*patches, l_med, l_mean, l_jit],
                 framealpha=0.88, edgecolor="#ddd",
                 loc="upper right", ncol=2,
-                prop={"family": "Arial", "size": 12})
+                prop={"family": _FONTE, "size": 12})
 
 # ── Export ────────────────────────────────────────────────────────────────
 fig.savefig(OUT_PDF, dpi=300, bbox_inches="tight", facecolor="white")
