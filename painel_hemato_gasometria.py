@@ -49,11 +49,13 @@ COLOR_AXIS       = "#5B6470"
 
 plt.rcParams["font.family"] = "DejaVu Sans"
 
-with open("/home/claude/hemato_gaso_stats.pkl", "rb") as f:
+# arquivos gerados por painel_hemato_gasometria_dados.py
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+with open(os.path.join(BASE_DIR, "hemato_gaso_stats.pkl"), "rb") as f:
     STATS = pickle.load(f)
-with open("/home/claude/hemato_gaso_raw.pkl", "rb") as f:
+with open(os.path.join(BASE_DIR, "hemato_gaso_raw.pkl"), "rb") as f:
     RAW = pickle.load(f)
-with open("/home/claude/hemato_gaso_refs.pkl", "rb") as f:
+with open(os.path.join(BASE_DIR, "hemato_gaso_refs.pkl"), "rb") as f:
     REFS = pickle.load(f)
 
 # nome interno -> (rotulo exibido)
@@ -99,6 +101,9 @@ DOMAINS = [
     ("Gasometria venosa", ["BE_ven", "PCO2_ven", "FiO2_ven", "PO2_ven", "P50c_ven",
                             "HCO3_ven", "SvO2_ven", "Temperatura_ven", "pH_ven"]),
 ]
+
+# apenas variaveis significativas (p < 0,05)
+DOMAINS = [(dom, [v for v in names if STATS[v]["p"] < 0.05]) for dom, names in DOMAINS]
 
 
 def get_ref_windows(var):
@@ -236,7 +241,7 @@ def build_figure():
     fig = plt.figure(figsize=(fig_w, fig_h), dpi=100)
     fig.patch.set_facecolor("white")
 
-    title = "Exames Hematológicos e Gasométricos por Desfecho — Mediana por Paciente — Box Plot"
+    title = "Exames Hematológicos e Gasométricos por Desfecho — Mediana por Paciente — Box Plot — Variáveis Significativas"
     fig.text(0.008, 1 - 0.42 / fig_h, title, fontsize=25, fontweight="bold",
               color=COLOR_TEXT_DARK, va="top", ha="left")
     subtitle = "Box plot por paciente, por Alta vs. Óbito hospitalar  |  HCFMRP-USP (subamostra n=508)"
@@ -286,8 +291,7 @@ def build_figure():
 
 
 if __name__ == "__main__":
-    outdir = "/mnt/user-data/outputs"
-    os.makedirs(outdir, exist_ok=True)
+    outdir = BASE_DIR
     fig = build_figure()
     base = "painel_hemato_gasometria_boxplot_medianapaciente_pt"
     fig.savefig(os.path.join(outdir, base + ".pdf"), format="pdf")

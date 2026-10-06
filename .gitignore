@@ -1,0 +1,4 @@
+# patient-level data and derived intermediates
+*.xlsx
+hemato_gaso_*.pkl
+__pycache__/
