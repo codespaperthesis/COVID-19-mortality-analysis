@@ -15,9 +15,12 @@ with short COVID by Fisher's exact test (crude OR) and by logistic regression
 adjusted for age, critical COVID and log(1 + hospital days), since more days in
 hospital mechanically mean more prescriptions.
 
-Denominator: admissions whose patient has ≥ 1 prescription record (508 of the
-699 patients; prescriptions of the 4 re-admitted patients are linked to both of
-their admissions because the sheet has no dates).
+Cohort: the 508 patients of the prescription sheet, all of whom are in the
+mother sheet, one row per patient. Admission date, hospital days, outcome and
+clinical variables come from the mother sheet. The 3 of them with two
+admissions (re-admitted after 2–3 days) are collapsed to one row: first
+admission date, summed hospital days, lab follow-up counted from the first
+admission, worst outcome/condition across both admissions.
 
 Outputs (in --out-dir): Figure_long_covid_farmaco_PT/EN (.png, .tiff),
 long_covid_farmaco_classes.csv, long_covid_farmaco_polifarmacia.csv.
@@ -25,6 +28,7 @@ long_covid_farmaco_classes.csv, long_covid_farmaco_polifarmacia.csv.
 Usage: python 13_long_covid_pharmacotherapy.py [--data-dir DIR] [--out-dir DIR]
 """
 import argparse
+import sys
 import importlib.util
 import os
 import re
@@ -37,6 +41,7 @@ from matplotlib.lines import Line2D
 from scipy.stats import fisher_exact, kruskal, mannwhitneyu
 import statsmodels.api as sm
 
+sys.dont_write_bytecode = True
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 _spec = importlib.util.spec_from_file_location(
     "temporal", os.path.join(BASE_DIR, "12_long_covid_temporal_profile.py"))
@@ -132,7 +137,7 @@ TXT = {
         weeks3="3 sem", weeks12="12 sem", nD="n",
         foot=("Prescrições sem data: as classes não podem ser posicionadas no tempo; o painel D mostra a prevalência "
               "em pacientes agrupados pelo tempo de doença observado (internação ou último exame em até 365 dias).\n"
-              "Denominador: internações com ≥ 1 prescrição registrada (Curta {short}, Pós-aguda {post}, "
+              "Coorte: os {n} pacientes da planilha de prescrição, com admissão e internação da planilha mãe (Curta {short}, Pós-aguda {post}, "
               "Crônica {chronic}, Óbito {death}). Classes por expressão regular sobre NOME_MEDIC; formas tópicas/"
               "oftálmicas excluídas das classes sistêmicas. Associação não implica efeito causal do medicamento."),
     ),
@@ -149,7 +154,7 @@ TXT = {
         weeks3="3 wk", weeks12="12 wk", nD="n",
         foot=("Prescriptions are undated: drug classes cannot be placed on the time axis; panel D shows prevalence "
               "in patients grouped by observed illness time (hospital stay or last lab record within 365 days).\n"
-              "Denominator: admissions with ≥ 1 recorded prescription (Short {short}, Post-acute {post}, "
+              "Cohort: the {n} patients of the prescription sheet, with admission and stay from the mother sheet (Short {short}, Post-acute {post}, "
               "Chronic {chronic}, Death {death}). Classes by regular expression on NOME_MEDIC; topical/ophthalmic "
               "forms excluded from systemic classes. Association does not imply a causal drug effect."),
     ),
@@ -176,13 +181,34 @@ def drug_classes(presc):
     return per_pt
 
 
+FLAGS = ["obito", "crit", "has_lab", "post_discharge"]
+
+
+def per_patient(d):
+    """One row per patient (mother-sheet data). Patients with two admissions keep the first
+    admission date, the summed hospital days and lab follow-up counted from that first date."""
+    d = d.copy()
+    d["lab_end"] = d["entrada"] + pd.to_timedelta(d["last_lab"], unit="D")
+    d["n_adm"] = d.groupby("Registro")["ep"].transform("size")
+    agg = {c: "first" for c in d.columns if c not in ("Registro",)}
+    agg.update({"entrada": "min", "los": "sum", "lab_end": "max", **{f: "max" for f in FLAGS}})
+    p = d.sort_values("entrada").groupby("Registro", as_index=False).agg(agg)
+    p["last_lab"] = (p["lab_end"] - p["entrada"]).dt.total_seconds() / 86400
+    p["T"] = np.where(p["obito"] == 1, p["los"], np.fmax(p["los"], p["last_lab"].fillna(0)))
+    cls = lambda t, o: "death" if o else ("short" if t <= T.SHORT_MAX else ("post" if t <= T.POST_MAX else "chronic"))
+    p["grupo"] = [cls(t, o) for t, o in zip(p["T"], p["obito"])]
+    p["grupo_los"] = [cls(t, o) for t, o in zip(p["los"], p["obito"])]
+    p["long_covid"] = p["grupo"].isin(["post", "chronic"]).astype(int)
+    return p
+
+
 def build(data_dir):
     mae, ea, eb, presc = T.load(data_dir)
     d, _, _ = T.build(mae, ea, eb, presc)
     pp = drug_classes(presc)
     d = d.drop(columns=[c for c in pp.columns if c in d.columns])     # replace the coarse flags of script 12
+    d = per_patient(d[d["Registro"].isin(pp.index)])
     d = d.merge(pp, left_on="Registro", right_index=True, how="left")
-    d = d[d["has_rx"] == 1].copy()
     d["items_day"] = d["n_items"] / d["los"].clip(lower=1)
     d["log_los"] = np.log1p(d["los"])
     d["tbin"] = pd.cut(d["T"], T_BINS, right=True, include_lowest=True)
@@ -382,7 +408,7 @@ def figure(d, ct, poly, lang, out_base):
              ("por faixa" if lang == "PT" else "per bin") + ")", fontsize=7.5, color=SUBTEXT)
 
     ng = {g: int((d["grupo"] == g).sum()) for g in GROUPS}
-    fig.text(0.02, 0.008, L["foot"].format(**ng), fontsize=8, color=SUBTEXT, va="bottom")
+    fig.text(0.02, 0.008, L["foot"].format(n=len(d), **ng), fontsize=8, color=SUBTEXT, va="bottom")
     fig.savefig(out_base + ".png", dpi=200, facecolor="white")
     fig.savefig(out_base + ".tiff", dpi=DPI, facecolor="white", pil_kwargs={"compression": "tiff_lzw"})
     plt.close(fig)
@@ -399,7 +425,10 @@ def main():
     d = build(a.data_dir)
     ct = class_table(d)
     poly = poly_table(d)
-    print("Admissions with prescriptions:", len(d), d["grupo"].value_counts().to_dict())
+    print(f"Patients: {len(d)} (unique: {d['Registro'].nunique()}; collapsed re-admissions: "
+          f"{int((d['n_adm'] > 1).sum())})")
+    print("Groups (stay + lab follow-up):", d["grupo"].value_counts().to_dict())
+    print("Groups (mother-sheet stay only):", d["grupo_los"].value_counts().to_dict())
     cols = ["PT", "short", "post", "chronic", "death", "users_surv", "OR_crude", "p_crude",
             "OR_adj", "OR_adj_lo", "OR_adj_hi", "p_adj"]
     print(ct[cols].round(3).to_string(index=False))
