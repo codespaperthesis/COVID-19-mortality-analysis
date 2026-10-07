@@ -202,9 +202,13 @@ def per_patient(d):
     return p
 
 
-def build(data_dir):
-    mae, ea, eb, presc = T.load(data_dir)
-    d, _, _ = T.build(mae, ea, eb, presc)
+def build(data_dir, loaded=None):
+    """loaded: optional (mae, ea, eb, presc, d703) to avoid re-reading the sheets."""
+    if loaded is None:
+        mae, ea, eb, presc = T.load(data_dir)
+        d, _, _ = T.build(mae, ea, eb, presc)
+    else:
+        mae, ea, eb, presc, d = loaded
     pp = drug_classes(presc)
     d = d.drop(columns=[c for c in pp.columns if c in d.columns])     # replace the coarse flags of script 12
     d = per_patient(d[d["Registro"].isin(pp.index)])

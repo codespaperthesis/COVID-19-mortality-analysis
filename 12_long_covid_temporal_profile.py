@@ -131,7 +131,8 @@ MARKER_EN = {"Proteína C reativa": "C-reactive protein", "D-dímero": "D-dimer"
              "Glicemia/jejum": "Fasting glucose", "Albumina": "Albumin", "Fibrinogênio": "Fibrinogen",
              "Bilirrubina": "Bilirubin", "Triglicérides": "Triglycerides", "Colesterol total": "Total cholesterol",
              "HDL colesterol": "HDL cholesterol", "LDL colesterol": "LDL cholesterol", "Troponina I": "Troponin I",
-             "Ácido úrico": "Uric acid", "Hb1Ac": "HbA1c", "TP/INR": "PT/INR"}
+             "Ácido úrico": "Uric acid", "Hb1Ac": "HbA1c", "TP/INR": "PT/INR",
+             "TGO": "AST", "TGP": "ALT", "TTPA": "aPTT", "Magnésio": "Magnesium", "Cloro": "Chloride"}
 
 
 # ----------------------------------------------------------------------------- data
