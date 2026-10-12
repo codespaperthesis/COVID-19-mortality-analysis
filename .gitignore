@@ -1,0 +1,4 @@
+# raw review spreadsheet (kept local)
+*.xlsx
+__pycache__/
+.cache/
