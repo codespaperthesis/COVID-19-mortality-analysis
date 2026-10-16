@@ -138,8 +138,8 @@ top_frac = 1 - POL_CABECALHO / fig_h
 bottom_frac = POL_RODAPE / fig_h
 
 fig, axes = plt.subplots(
-    1, 4, figsize=(18.5, fig_h), facecolor=BG,
-    gridspec_kw={"width_ratios": [3.0, 3.3, 2.0, 3.3], "wspace": 0.06,
+    1, 4, figsize=(19.5, fig_h), facecolor=BG,
+    gridspec_kw={"width_ratios": [3.0, 3.3, 2.6, 3.3], "wspace": 0.06,
                  "top": top_frac, "bottom": bottom_frac},
 )
 ax_labels, ax_or, ax_gap, ax_ora = axes
@@ -216,8 +216,7 @@ def draw_panel(ax, col_or, col_lo, col_hi, col_p, title, xlim):
                 markeredgecolor=cor, markeredgewidth=1.5, zorder=5)
 
         p_str = f"{sig_stars(p_)}"
-        fmt = "{:.2f}" if OR_ < 10 and lo_ < 10 and hi_ < 10 else "{:.1f}"
-        txt = f"{fmt.format(OR_)} ({fmt.format(lo_)}\u2013{fmt.format(hi_)}){p_str}"
+        txt = f"{OR_:.2f} ({lo_:.2f}\u2013{hi_:.2f}){p_str}"
         ax.text(1.05, i, txt, transform=ax.get_yaxis_transform(),
                 color=TEXT, fontsize=12.5, va="center", ha="left", clip_on=False)
 
