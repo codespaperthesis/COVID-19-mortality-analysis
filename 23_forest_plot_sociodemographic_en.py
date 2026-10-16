@@ -80,10 +80,10 @@ LINHAS = [
 ]
 
 n_rows = len(LINHAS)
-row_h = 0.46
-fig_h = n_rows * row_h + 1.85
+row_h = 0.5
+fig_h = n_rows * row_h + 1.75
 fig, axes = plt.subplots(
-    1, 4, figsize=(18.6, fig_h), facecolor="white",
+    1, 4, figsize=(19.5, fig_h), facecolor="white",
     gridspec_kw={"width_ratios": [3.3, 3.3, 3.0, 3.3], "wspace": 0.05},
 )
 ax_labels, ax_c, ax_gap, ax_a = axes
@@ -104,8 +104,8 @@ for ax in (ax_c, ax_a):
     for spine in ["top", "right"]:
         ax.spines[spine].set_visible(False)
     ax.set_yticks([])
-    ax.tick_params(axis="x", labelsize=12)
-    ax.set_xlabel("Odds ratio (log scale)", fontsize=12.5, color="#444")
+    ax.tick_params(axis="x", labelsize=13.5)
+    ax.set_xlabel("Odds ratio (log scale)", fontsize=14, color="#444")
 
 ax_labels.set_xlim(0, 1)
 for spine in ax_labels.spines.values():
@@ -113,28 +113,28 @@ for spine in ax_labels.spines.values():
 ax_labels.set_xticks([])
 ax_labels.set_yticks([])
 
-ax_c.set_title("Crude OR (95% CI)", fontsize=15.5, fontweight="bold", color=TEXT, pad=11)
-ax_a.set_title("Adjusted OR (95% CI)", fontsize=15.5, fontweight="bold", color=TEXT, pad=11)
+ax_c.set_title("Crude OR (95% CI)", fontsize=17.5, fontweight="bold", color=TEXT, pad=12)
+ax_a.set_title("Adjusted OR (95% CI)", fontsize=17.5, fontweight="bold", color=TEXT, pad=12)
 
 for i, linha in enumerate(LINHAS):
     if linha["tipo"] == "header":
-        ax_labels.text(0.0, i, linha["label"], fontsize=14.5,
+        ax_labels.text(0.0, i, linha["label"], fontsize=16.5,
                         fontweight="bold", color=TEXT, va="center", ha="left")
         continue
-    ax_labels.text(0.045, i, linha["label"], fontsize=13.5, color=TEXT, va="center", ha="left")
+    ax_labels.text(0.045, i, linha["label"], fontsize=15.5, color=TEXT, va="center", ha="left")
     ax_labels.text(0.98, i, f"n = {linha['n']} ({linha['pct']}%)",
-                    fontsize=11, style="italic", color=MUTED, va="center", ha="right")
+                    fontsize=12.5, style="italic", color=MUTED, va="center", ha="right")
 
     if linha["tipo"] == "ref":
         for ax in (ax_c, ax_a):
             ax.text(0.5, i, "ref.", transform=ax.get_yaxis_transform(),
-                    ha="center", va="center", fontsize=12.5, color=MUTED, style="italic")
+                    ha="center", va="center", fontsize=14, color=MUTED, style="italic")
         continue
     if linha["tipo"] == "inestimavel":
         for ax in (ax_c, ax_a):
-            ax.plot(1.0, i, marker="D", markersize=7, color="black", zorder=5)
+            ax.plot(1.0, i, marker="D", markersize=7.5, color="black", zorder=5)
             ax.text(0.5, i, "not estimable", transform=ax.get_yaxis_transform(),
-                    ha="center", va="center", fontsize=12, color=MUTED, style="italic")
+                    ha="center", va="center", fontsize=13.5, color=MUTED, style="italic")
         continue
 
     for ax, key, bold in [(ax_c, "crude", True), (ax_a, "adj", False)]:
@@ -142,13 +142,13 @@ for i, linha in enumerate(LINHAS):
         cor = GREEN if OR < 1 else ORANGE
         lo_p = max(lo, 0.105)
         hi_p = min(hi, 380)
-        ax.plot([lo_p, hi_p], [i, i], color=cor, linewidth=2.4, zorder=3, solid_capstyle="round")
-        ax.plot(OR, i, marker="D" if sig else "o", markersize=9 if sig else 8.3,
+        ax.plot([lo_p, hi_p], [i, i], color=cor, linewidth=2.6, zorder=3, solid_capstyle="round")
+        ax.plot(OR, i, marker="D" if sig else "o", markersize=9.8 if sig else 9,
                 color=cor, markerfacecolor=cor if sig else "white",
-                markeredgecolor=cor, markeredgewidth=1.6, zorder=5)
+                markeredgecolor=cor, markeredgewidth=1.7, zorder=5)
         txt = f"{OR:.2f} ({lo:.2f}–{hi:.2f})" + ("***" if sig else "")
         ax.text(1.0, i, txt, transform=ax.get_yaxis_transform(),
-                ha="left", va="center", fontsize=12.5, color=TEXT,
+                ha="left", va="center", fontsize=14.5, color=TEXT,
                 fontweight="bold" if (bold and sig) else "normal", clip_on=False)
 
 legend_elements = [
@@ -160,25 +160,17 @@ legend_elements = [
            markeredgewidth=1.1, markersize=6.5, label="p ≥ 0.05"),
     Line2D([0], [0], color=GOLD, linewidth=1.3, linestyle="--", label="OR = 1"),
 ]
-fig.legend(handles=legend_elements, fontsize=12.5, frameon=False, ncol=5,
+fig.legend(handles=legend_elements, fontsize=14, frameon=False, ncol=5,
            loc="upper center", bbox_to_anchor=(0.58, 1.0), labelcolor=TEXT,
-           handletextpad=0.5, columnspacing=1.6)
+           handletextpad=0.5, columnspacing=1.8)
 
 fig.suptitle("Forest plot — Crude and adjusted odds ratios for in-hospital death",
-             fontsize=19, fontweight="bold", color=TEXT, x=0.012, ha="left", y=1.1)
-fig.text(0.012, 1.055,
+             fontsize=21, fontweight="bold", color=TEXT, x=0.012, ha="left", y=1.1)
+fig.text(0.012, 1.052,
           "Sociodemographic variables | N = 703 | 274 deaths | Crude age-group OR recalculated with <18 years as reference",
-          ha="left", va="top", fontsize=12.5, color="#555")
+          ha="left", va="top", fontsize=14, color="#555")
 
-footnote = (
-    "Notes: Crude OR from simple logistic regression; adjusted OR from multiple logistic regression with mutual adjustment among the variables shown.\n"
-    "Age group (crude): deaths/discharges <18 = 5/203; 18–44 = 30/76; 45–60 = 68/67; >60 = 171/83; 95% CI and Wald p.\n"
-    "† Crude values kept from the original run: for variables with more than two categories, confirm in the dataset whether they were estimated against the stated reference category.\n"
-    "Education: 38 missing. *p<0.05; **p<0.01; ***p<0.001."
-)
-fig.text(0.012, 0.025, footnote, ha="left", va="top", fontsize=9.5, color="#555")
-
-fig.subplots_adjust(top=0.855, bottom=0.145, left=0.012, right=0.99)
+fig.subplots_adjust(top=0.85, bottom=0.075, left=0.012, right=0.99)
 
 for ext, dpi in [("png", 180)]:
     out_path = os.path.join(BASE_DIR, f"forest_sociodemographic_en.{ext}")
