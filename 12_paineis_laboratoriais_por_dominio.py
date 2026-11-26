@@ -322,6 +322,7 @@ def main():
     ap.add_argument("--style", choices=["box", "point"], default="box")
     ap.add_argument("--todas", action="store_true", help="inclui variaveis nao significativas")
     ap.add_argument("--dpi", type=int, default=600)
+    ap.add_argument("--sem-legenda", action="store_true", help="omite a legenda de cores no topo")
     ap.add_argument("--figura", choices=["15", "16"], default="16",
                     help="15 = hematologicos/gasometricos; 16 = bioquimicos (padrao)")
     args = ap.parse_args()
@@ -332,7 +333,7 @@ def main():
     doms = FIG15_DOMAINS if args.figura == "15" else ALL_DOMAINS
     cols = 4 if args.figura == "15" else 3
     for i, (dom, names) in enumerate(selected_domains(leaner=not args.todas, domains=doms)):
-        fig = build_domain_figure(dom, names, style=args.style, cols=cols)
+        fig = build_domain_figure(dom, names, style=args.style, cols=cols, show_legend=not args.sem_legenda)
         base = os.path.join(args.outdir, f"Fig{args.figura}{letters[i]}_{slug(dom)}")
         fig.savefig(base + ".tiff", format="tiff", dpi=args.dpi, pil_kwargs={"compression": "tiff_lzw"})
         fig.savefig(base + ".pdf", format="pdf")
