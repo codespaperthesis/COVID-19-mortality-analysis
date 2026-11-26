@@ -70,6 +70,25 @@ ALL_DOMAINS = [
     ("Outros marcadores", ["LCR-Lactato", "Procalcitonina", "Ácido úrico"]),
 ]
 
+# Figura 15 - hematologicos e gasometricos (chaves "|art"/"|ven" separam a
+# mesma variavel nas duas gasometrias; o sufixo nao aparece no grafico).
+FIG15_DOMAINS = [
+    ("Hematológicos", ["Plaquetas", "Glóbulos brancos", "Glóbulos vermelhos", "Hematócrito", "RDW",
+                       "Monócitos", "Neutrófilos segment.", "Linfócitos", "Basófilos", "Eosinófilos",
+                       "CHCM", "HCM"]),
+    ("Gasometria arterial", ["PCO2|art", "BE|art", "FiO2|art", "P50c|art", "SaO2|art", "pH|art",
+                             "HCO3|art", "PO2|art", "Temperatura|art"]),
+    ("Gasometria venosa", ["BE|ven", "PCO2|ven", "FiO2|ven", "PO2|ven", "P50c|ven", "HCO3|ven",
+                           "pH|ven", "SvO2|ven", "Temperatura|ven"]),
+]
+
+DISPLAY = {"Hb1Ac": "HbA1c"}
+
+
+def display_name(var):
+    v = var.split("|")[0]
+    return DISPLAY.get(v, v)
+
 
 def load_data(data_dir):
     global STATS, RAW, REFS
@@ -95,9 +114,9 @@ def is_significant_and_robust(var, min_n=10):
     return True
 
 
-def selected_domains(leaner=True):
+def selected_domains(leaner=True, domains=None):
     out = []
-    for name, names in ALL_DOMAINS:
+    for name, names in (domains or ALL_DOMAINS):
         kept = [v for v in names if v in STATS and (is_significant_and_robust(v) if leaner else True)]
         if kept:
             out.append((name, kept))
@@ -223,7 +242,7 @@ def draw_panel(fig, ax_left, ax_top_in, ax_width, ax_height_in, fig_h, var, styl
 
     p = s["p"]
     sig = (p is not None) and (not np.isnan(p)) and p < 0.05
-    ax.set_title(var, fontsize=11.6, fontweight="bold", color=COLOR_TEXT_DARK, pad=8)
+    ax.set_title(display_name(var), fontsize=11.6, fontweight="bold", color=COLOR_TEXT_DARK, pad=8)
     ax.text(0.5, 1.42, fmt_p(p), transform=ax.transAxes, fontsize=9.4,
             fontweight="bold" if sig else "normal",
             color=(COLOR_TEXT_DARK if sig else COLOR_TEXT_MUTED), ha="center", va="bottom")
@@ -303,14 +322,18 @@ def main():
     ap.add_argument("--style", choices=["box", "point"], default="box")
     ap.add_argument("--todas", action="store_true", help="inclui variaveis nao significativas")
     ap.add_argument("--dpi", type=int, default=600)
+    ap.add_argument("--figura", choices=["15", "16"], default="16",
+                    help="15 = hematologicos/gasometricos; 16 = bioquimicos (padrao)")
     args = ap.parse_args()
 
     load_data(args.data_dir)
     os.makedirs(args.outdir, exist_ok=True)
     letters = "abcdefghijklmnopqrstuvwxyz"
-    for i, (dom, names) in enumerate(selected_domains(leaner=not args.todas)):
-        fig = build_domain_figure(dom, names, style=args.style)
-        base = os.path.join(args.outdir, f"Fig16{letters[i]}_{slug(dom)}")
+    doms = FIG15_DOMAINS if args.figura == "15" else ALL_DOMAINS
+    cols = 4 if args.figura == "15" else 3
+    for i, (dom, names) in enumerate(selected_domains(leaner=not args.todas, domains=doms)):
+        fig = build_domain_figure(dom, names, style=args.style, cols=cols)
+        base = os.path.join(args.outdir, f"Fig{args.figura}{letters[i]}_{slug(dom)}")
         fig.savefig(base + ".tiff", format="tiff", dpi=args.dpi, pil_kwargs={"compression": "tiff_lzw"})
         fig.savefig(base + ".pdf", format="pdf")
         fig.savefig(base + ".png", format="png", dpi=300)

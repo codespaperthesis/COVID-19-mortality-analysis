@@ -1,0 +1,4 @@
+# dados por paciente - nao versionar
+*.xlsx
+*.pkl
+dados_lab/
